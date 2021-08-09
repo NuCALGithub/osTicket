@@ -3178,7 +3178,7 @@ implements RestrictedAccess, Threadable, Searchable {
 
         if (!$cfg
             || !($this->checkStaffPerm($thisstaff,
-                Ticket::PERM_EDIT))
+                Ticket::PERM_EDIT) || !$thisstaff)
         ) {
             return false;
         }
