@@ -121,6 +121,70 @@ class TicketApiController extends ApiController {
         $this->response(201, $ticket->getNumber());
     }
 
+    function get($format) {
+
+        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets())
+            return $this->exerr(401, __('API key not authorized'));
+
+        $ticket = null;
+        if(!strcasecmp($format, 'email')) {
+            # Handle remote piped emails - could be a reply...etc.
+            $ticket = $this->processEmail();
+        } else {
+            # Parse request body
+            $ticket = $this->getTicket($this->getRequest($format));
+        }
+
+        if(!$ticket)
+            return $this->exerr(500, __("Unable to get ticket details: unknown error"));
+        $this->response(200, json_encode($ticket),$contentType="application/json");
+    }
+
+    function update($format) {
+
+        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets())
+            return $this->exerr(401, __('API key not authorized'));
+
+        $ticket = null;
+        if(!strcasecmp($format, 'email')) {
+            # Handle remote piped emails - could be a reply...etc.
+            $ticket = $this->processEmail();
+        } else {
+            # Parse request body
+            $ticket = $this->updateTicket($this->getRequest($format));
+        }
+
+        if(!$ticket)
+            return $this->exerr(500, __("Unable to create new ticket: unknown error"));
+
+        $this->response(200, "Ticket: ".(string) $ticket->getNumber()." has updated succesfully");
+    }
+
+    function deleteTicket($format) {
+        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets())
+            return $this->exerr(401, __('API key not authorized'));
+
+        $ticket = null;
+        if(!strcasecmp($format, 'email')) {
+            # Handle remote piped emails - could be a reply...etc.
+            $ticket = $this->processEmail();
+        } else {
+            # Parse request body
+            $data = $this->getRequest($format);
+            $ticket = $this->getTicket($data);
+            $isDeleted = false;
+            if($ticket != null)
+                $isDeleted = $ticket->delete("Deleted by API");
+            else
+                return $this->exerr(400, __('Unable to find ticket with given number: Bad request body'));
+        }
+
+        if(!$isDeleted)
+            return $this->exerr(500, __("Unable to delete ticket: unknown error"));
+
+        $this->response(200, "Ticket deleted succesfully");
+    }
+
     /* private helper functions */
 
     function createTicket($data) {
@@ -153,6 +217,43 @@ class TicketApiController extends ApiController {
         return $ticket;
     }
 
+    function getTicket($data) {
+        $hasNumber = isset($data['number']);
+        $ticket = null;
+        if($hasNumber){
+            $ticket = Ticket::lookup(array('number' => $data['number']));
+            if(!$ticket)
+                return $this->exerr(400, __("Unable to find ticket: bad ticket number"));
+        }else{
+            return $this->exerr(400, __("No number provided: bad request body"));
+        }
+
+        return $ticket;
+    }
+
+    function updateTicket($data) {
+        $tic = $this->getTicket($data);
+        $errors = array();
+        if($tic != null){
+            $tic->update($data,$errors);
+            if (count($errors)) {
+                if(isset($errors['errno']) && $errors['errno'] == 403)
+                    return $this->exerr(403, __('No Permission'));
+                else
+                    return $this->exerr(
+                            400,
+                            __("Unable to update ticket: validation errors").":\n"
+                            .Format::array_implode(": ", "\n", $errors)
+                            );
+            } else if ($tic == null) {
+                return $this->exerr(500, __("Unable to update ticket: unknown error"));
+            }
+        } else {
+            return $this->exerr(400, __('Unable to find ticket with given number: bad request body'));
+        }
+
+        return $tic;
+    }
     function processEmail($data=false) {
 
         if (!$data)
