@@ -20,17 +20,10 @@ define('DISABLE_SESSION', false);
 require 'api.inc.php';
 
 # Include the main api urls
-
-
 require_once INCLUDE_DIR."class.dispatcher.php";
 
 $dispatcher = patterns('',
-        url_post("^/tickets\.create\.(?P<format>xml|json|email)$", array('api.tickets.php:TicketApiController','create')),
-        url_get("^/tickets\.get\.(?P<format>xml|json|email)$", array('api.tickets.php:TicketApiController','get')),
-        url_post("^/tickets\.close\.(?P<format>xml|json|email)$", array('api.tickets.php:TicketApiController','closeTicket')),
-        url_post("^/tickets\.reopen\.(?P<format>xml|json|email)$", array('api.tickets.php:TicketApiController','reopenTicket')),
-        url_post("^/tickets\.update\.(?P<format>xml|json|email)$", array('api.tickets.php:TicketApiController','update')),
-        url_delete("^/tickets\.delete\.(?P<format>xml|json|email)$", array('api.tickets.php:TicketApiController','deleteTicket')),
+        url_post("^/tickets\.(?P<format>xml|json|email)$", array('api.tickets.php:TicketApiController','create')),
         url('^/tasks/', patterns('',
                 url_post("^cron$", array('api.cron.php:CronApiController', 'execute'))
          ))
