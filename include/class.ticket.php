@@ -1601,9 +1601,9 @@ implements RestrictedAccess, Threadable, Searchable {
     function setState($state, $alerts=false) {
         switch (strtolower($state)) {
         case 'open':
-            return $this->setStatus('open');
+            return $this->setStatus(1);  // status_id for open
         case 'closed':
-            return $this->setStatus('closed');
+            return $this->setStatus(3); // status_id for closed
         case 'answered':
             return $this->setAnsweredState(1);
         case 'unanswered':
@@ -3673,7 +3673,7 @@ implements RestrictedAccess, Threadable, Searchable {
 
         if (!$cfg
             || !($this->checkStaffPerm($thisstaff,
-                Ticket::PERM_EDIT))
+                Ticket::PERM_EDIT) || !$thisstaff)
         ) {
             return false;
         }
