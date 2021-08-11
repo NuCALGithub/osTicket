@@ -229,6 +229,84 @@ class TicketApiController extends ApiController {
         }
     }
 
+    function getStaff($format){
+        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets())
+            return $this->exerr(401, __('API key not authorized'));
+
+        $staff = null;
+        $staff = $this->_getStaff($this->getRequest($format));
+        if(!$staff)
+            return $this->exerr(500, __("Unable to find staff: unknown error"));
+
+        $this->response(200, json_encode($staff),$contentType="application/json");
+    }
+
+    function getAllStaff($format){
+        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets())
+            return $this->exerr(401, __('API key not authorized'));
+
+        $staffs = null;
+        $staffs = Staff::objects();
+        $res = array();
+        foreach($staffs as $staff){
+            array_push($res,$staff);
+        }
+        if(!$res)
+            return $this->exerr(500, __("Unable to find staff list: unknown error"));
+
+        $this->response(200, json_encode($res),$contentType="application/json");
+    }
+    
+
+    function getStaffTickets($format){
+        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets())
+            return $this->exerr(401, __('API key not authorized'));
+
+        $staff = null;
+        if(!strcasecmp($format, 'email')) {
+            # Handle remote piped emails - could be a reply...etc.
+            $ticket = $this->processEmail();
+        } else {
+            $data = $this->getRequest($format);
+            $staff = $this->_getStaff($data);
+            $tickets = Ticket::objects()->filter(array('staff_id'=>$staff->getId()));
+            $res = array();
+            foreach($tickets as $ticket){
+                array_push($res,$ticket);
+            }
+            # Parse request body
+        }
+
+        if(!$res)
+            return $this->exerr(500, __("Unable to find staff tickets: unknown error"));
+
+        $this->response(200, json_encode($res),$contentType="application/json");
+    }
+
+    function assignTicket($format){
+        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets())
+            return $this->exerr(401, __('API key not authorized'));
+
+        $staff = null;
+        if(!strcasecmp($format, 'email')) {
+            # Handle remote piped emails - could be a reply...etc.
+            $ticket = $this->processEmail();
+        } else {
+            $data = $this->getRequest($format);
+            $ticket = $this->getTicket($data);
+            if(isset($data['staffUserName'])){
+                $staff = $this->_getStaff($data);
+                $isAssigned = $ticket->assignToStaff($staff->getId(),$data['note']);
+                if(!$isAssigned)
+                    return $this->exerr(500, __("Unable to assign ticket: unknown error"));
+            } else if(isset($data['teamame'])){
+                $data=$data;
+            }
+            # Parse request body
+        }
+        $this->response(200, "Ticket: ".$data['number']." assigned to ".$data['staffUserName']." succesfully");
+    }
+
     /* private helper functions */
 
     function createTicket($data) {
@@ -297,6 +375,20 @@ class TicketApiController extends ApiController {
         }
 
         return $tic;
+    }
+
+    function _getStaff($data){
+        $hasUserName = isset($data['staffUserName']);
+        $staff = null;
+        if($hasUserName){
+            $staff = Staff::lookup(array('username' => $data['staffUserName']));
+            if(!$staff)
+                return $this->exerr(400, __("Unable to find staff: bad staff username"));
+        }else{
+            return $this->exerr(400, __("No username provided: bad request body"));
+        }
+
+        return $staff;
     }
 
     function processEmail($data=false) {
