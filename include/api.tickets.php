@@ -390,6 +390,70 @@ class TicketApiController extends ApiController {
 
         return $staff;
     }
+    
+    function replyTicket($format) {
+
+        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets())
+            return $this->exerr(401, __('API key not authorized'));
+
+        $ticket = null;
+        if(!strcasecmp($format, 'email')) {
+            # Handle remote piped emails - could be a reply...etc.
+            $ticket = $this->processEmail();
+        } else {
+            # Parse request body
+            $data = $this->getRequest($format);
+            $ticket = $this->getTicket($data);
+            $staff = $this->_getStaff($data);
+            $errors = array();
+            $lock = $ticket->getLock();// ,"lockCode"=>$lock->getCode()
+            if($lock != null){
+                if($lock->getStaffId()!=$staff->getId()){
+                    return $this->exerr(401, __("Action Denied. Ticket is locked by someone else!"));
+                }
+                $data += array("lockCode"=>$lock->getCode());
+            }
+            $data += array("staffId"=>$staff->getId(),"poster"=>$staff);
+            $isReplied = $ticket->postReply($data,$errors);
+        }
+
+        if(!$isReplied)
+            return $this->exerr(500, __("Unable to reply to ticket: unknown error"));
+
+        $this->response(200, "Replied to Ticket: ".$data['number']." succesfully");
+    }
+
+    function postNoteTicket($format) {
+
+        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets())
+            return $this->exerr(401, __('API key not authorized'));
+
+        $ticket = null;
+        if(!strcasecmp($format, 'email')) {
+            # Handle remote piped emails - could be a reply...etc.
+            $ticket = $this->processEmail();
+        } else {
+            # Parse request body
+            $data = $this->getRequest($format);
+            $ticket = $this->getTicket($data);
+            if(isset($data['staffUserName'])){
+                $staff = $this->_getStaff($data);
+            }else {
+                $staff = "API";
+            }
+            if(isset($data['title']) && isset($data['note'])){
+                $isAdded = $ticket->logNote($data['title'],$data['note'],$staff,false);
+            }
+            else{
+                return $this->exerr(400, __("Unable to add new note to ticket: bad request body"));
+            }
+        }
+
+        if($isAdded == false)
+            return $this->exerr(500, __("Unable to create new ticket: unknown error"));
+
+        $this->response(200, "Posted note to ticket: ".$ticket->getNumber()." succesfully.");
+    }
 
     function processEmail($data=false) {
 
