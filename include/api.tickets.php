@@ -347,6 +347,31 @@ class TicketApiController extends ApiController {
         $this->response(200, json_encode($ticket));
     }
 
+    function orgTickets($format) {
+
+        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets())
+            return $this->exerr(401, __('API key not authorized'));
+
+        $ticket = null;
+        if(!strcasecmp($format, 'email')) {
+            # Handle remote piped emails - could be a reply...etc.
+            $ticket = $this->processEmail();
+        } else {
+            $data = $this->getRequest($format);
+            if(isset($data['org_id']))
+                $org = OrganizationModel::lookup($data['org_id']);
+            else
+                return $this->exerr(400, __("no org_id provided: bad request body"));
+            $data['criteria'] = json_decode("[[\"user__org__name\",\"equal\",\"".$org->getName()."\"]]");
+            $ticket = $this->_searchTicket($data);
+        }
+
+        if(!$ticket)
+            return $this->exerr(500, __("Unable to find tickets: unknown error"));
+
+        $this->response(200, json_encode($ticket));
+    }
+
     function deptTickets($format) {
 
         if(!($key=$this->requireApiKey()) || !$key->canCreateTickets())
