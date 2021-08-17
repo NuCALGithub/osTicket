@@ -307,7 +307,127 @@ class TicketApiController extends ApiController {
         $this->response(200, "Ticket: ".$data['number']." assigned to ".$data['staffUserName']." succesfully");
     }
 
+    function ticketSearch($format) {
+
+        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets())
+            return $this->exerr(401, __('API key not authorized'));
+
+        $ticket = null;
+        if(!strcasecmp($format, 'email')) {
+            # Handle remote piped emails - could be a reply...etc.
+            $ticket = $this->processEmail();
+        } else {
+            $ticket = $this->_searchTicket($this->getRequest($format));
+        }
+
+        if(!$ticket)
+            return $this->exerr(500, __("Unable to find tickets: unknown error"));
+
+        $this->response(200, json_encode($ticket));
+    }
+
+    function ticketHaveOrg($format) {
+
+        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets())
+            return $this->exerr(401, __('API key not authorized'));
+
+        $ticket = null;
+        if(!strcasecmp($format, 'email')) {
+            # Handle remote piped emails - could be a reply...etc.
+            $ticket = $this->processEmail();
+        } else {
+            $data = $this->getRequest($format);
+            $data['criteria'] = json_decode("[[\"user__org__name\",\"set\",null]]");
+            $ticket = $this->_searchTicket($data);
+        }
+
+        if(!$ticket)
+            return $this->exerr(500, __("Unable to find tickets: unknown error"));
+
+        $this->response(200, json_encode($ticket));
+    }
+
+    function deptTickets($format) {
+
+        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets())
+            return $this->exerr(401, __('API key not authorized'));
+
+        $ticket = null;
+        if(!strcasecmp($format, 'email')) {
+            # Handle remote piped emails - could be a reply...etc.
+            $ticket = $this->processEmail();
+        } else {
+            $data = $this->getRequest($format);
+            if(isset($data['dept_id']))
+                $query = Ticket::objects()->filter(array("dept_id"=>$data['dept_id']));
+            else
+                return $this->exerr(400, __("No dept_id provided: bad request body"));
+            $ticket = $this->_searchTicket($data,$query);
+        }
+
+        if(!$ticket)
+            return $this->exerr(500, __("Unable to find tickets: unknown error"));
+
+        $this->response(200, json_encode($ticket));
+    }
+
     /* private helper functions */
+
+
+    function _searchTicket($data,$query=null){
+        // Init =================================================
+        // Declaring variables that we use.
+        $tickets = array();     // Tickets array
+        $pageNumber = 1;        // Result page number
+        $limit = 25;            // Page ticket count limit
+        $criteria = null;       // Search criteria
+        
+        // Check Params =========================================
+        // Set criteria if given.
+        if(isset($data['criteria'])){
+            $criteria = $data['criteria'];
+        }
+        // Set page number if given (Default: 1)
+        if(isset($data['page']))
+            $pageNumber = $data['page'];
+        // Set ticket per page limit if given (Default: 25)
+        if(isset($data['limit'])){
+            // Check if limit exceeds max limit
+            if((int)$data['limit'] < 100)
+                $limit = $data['limit'];
+            else
+                return $this->exerr(400, __("Limit can not exceed 100: bad request body")); 
+        }
+
+        if(!isset($query)){
+            // Create a new search query for search
+            $query = new AdhocSearch(array(
+                'id' => "adhoc,API",
+                'root' => 'T',
+                'title' => __('Advanced Search API')
+             ));
+            // Set criteria
+            $query->config = $criteria;
+            // Create pagination for newly created search query
+            $pagination = new Pagenate(PHP_INT_MAX, $pageNumber, $limit);
+            $page = $pagination->paginateSimple($query->getQuery());
+        }else{
+            // Create pagination for existing search query
+            $pagination = new Pagenate(PHP_INT_MAX, $pageNumber, $limit);
+            $page = $pagination->paginateSimple($query);
+        }
+
+        
+        
+        // Get ticket information from the page and push it into tickets array
+        foreach($page as $ticket){
+            array_push($tickets,$ticket);
+        }
+
+        // Clearing up
+        $result = array('total'=>count($tickets),'result'=>$tickets);
+        return $result;
+    }
 
     function createTicket($data) {
 
