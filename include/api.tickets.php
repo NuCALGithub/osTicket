@@ -396,7 +396,68 @@ class TicketApiController extends ApiController {
         $this->response(200, json_encode($ticket));
     }
 
+    function getSLA($format) {
+
+        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets())
+            return $this->exerr(401, __('API key not authorized'));
+
+        $sla = null;
+        if(!strcasecmp($format, 'email')) {
+            # Handle remote piped emails - could be a reply...etc.
+            $sla = $this->processEmail();
+        } else {
+            $data = $this->getRequest($format);
+            if(isset($data['sla_id']))
+                $sla = SLA::lookup($data['sla_id']);
+            else{
+                $sla = $this->_getSLA($data);
+            }
+        }
+
+        if(!$sla)
+            return $this->exerr(500, __("Unable to find SLA plans: unknown error"));
+
+        $this->response(200, json_encode($sla));
+    }
+
     /* private helper functions */
+
+
+    function _getSLA($data){
+        // Init =================================================
+        // Declaring variables that we use.
+        $slas = array();        // slas array
+        $pageNumber = 1;        // Result page number
+        $limit = 25;            // Page ticket count limit
+        $criteria = null;       // Search criteria
+        
+        // Check Params =========================================
+        // Set page number if given (Default: 1)
+        if(isset($data['page']))
+            $pageNumber = $data['page'];
+        // Set sla per page limit if given (Default: 25)
+        if(isset($data['limit'])){
+            // Check if limit exceeds max limit
+            if((int)$data['limit'] < 100)
+                $limit = $data['limit'];
+            else
+                return $this->exerr(400, __("Limit can not exceed 100: bad request body")); 
+        }
+
+        // Create pagination for query
+        $pagination = new Pagenate(SLA::objects()->count(), $pageNumber, $limit);
+        $query = SLA::objects()->limit($pagination->getLimit())->offset($pagination->getStart());
+        $page = $pagination->paginateSimple($query);
+        
+        // Get sla information from the page and push it into slas array
+        foreach($page as $sla){
+            array_push($slas,$sla);
+        }
+
+        // Clearing up
+        $result = array('total'=>count($slas),'result'=>$slas);
+        return $result;
+    }
 
 
     function _searchTicket($data,$query=null){
