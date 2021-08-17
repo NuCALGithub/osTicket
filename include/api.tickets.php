@@ -420,6 +420,40 @@ class TicketApiController extends ApiController {
         $this->response(200, json_encode($sla));
     }
 
+    function transferTicket($format) {
+
+        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets())
+            return $this->exerr(401, __('API key not authorized'));
+
+        $ticket = null;
+        if(!strcasecmp($format, 'email')) {
+            # Handle remote piped emails - could be a reply...etc.
+            $ticket = $this->processEmail();
+        } else {
+            $data = $this->getRequest($format);
+            $ticket = $this->getTicket($data);
+            $form = new TransferForm($data);
+            $errors = array();
+            $isTransferred = $ticket->transfer($form,$errors);
+            if (count($errors)) {
+                if(isset($errors['errno']) && $errors['errno'] == 403)
+                    return $this->exerr(403, __('Transfer denied'));
+                else
+                    return $this->exerr(
+                            400,
+                            __("Unable to transef ticket: validation errors").":\n"
+                            .Format::array_implode(": ", "\n", $errors)
+                            );
+            }
+        }
+
+        if(!$isTransferred)
+            return $this->exerr(500, __("Unable to transfer ticket: unknown error"));
+
+        $result = array("status_code"=>200,"transfer"=>$isTransferred);
+        $this->response(200, json_encode($result));
+    }
+
     /* private helper functions */
 
 

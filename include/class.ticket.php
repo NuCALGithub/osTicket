@@ -2652,7 +2652,7 @@ implements RestrictedAccess, Threadable, Searchable {
         global $thisstaff, $cfg;
 
         // Check if staff can do the transfer
-        if (!$this->checkStaffPerm($thisstaff, Ticket::PERM_TRANSFER))
+        if (!$this->checkStaffPerm($thisstaff, Ticket::PERM_TRANSFER) && $thisstaff)
             return false;
 
         $cdept = $this->getDept(); // Current department
