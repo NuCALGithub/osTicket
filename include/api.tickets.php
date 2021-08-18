@@ -14,7 +14,7 @@ class TicketApiController extends ApiController {
             "attachments" => array("*" =>
                 array("name", "type", "data", "encoding", "size")
             ),
-            "message", "ip", "priorityId",
+            "message", "ip", "priorityId","ticket_id",
             "system_emails" => array(
                 "*" => "*"
             ),
@@ -136,7 +136,6 @@ class TicketApiController extends ApiController {
             # Parse request body
             $ticket = $this->getTicket($this->getRequest($format));
         }
-
         if(!$ticket)
             return $this->exerr(500, __("Unable to get ticket details: unknown error"));
         $this->response(200, json_encode($ticket),$contentType="application/json");
@@ -187,29 +186,12 @@ class TicketApiController extends ApiController {
         $this->response(200, "Ticket deleted succesfully");
     }
 
-    function setTicketState($data,$ticket) {
-
-        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets())
-            return $this->exerr(401, __('API key not authorized'));
-
-        $isChanged = $ticket->setState($data['state']);
-        if($isChanged == false){
-            return $this->exerr(400, __('State not found: Bad request body'));
-        }
-
-        if(!$ticket){
-            return $this->exerr(500, __("Unable to set ticket state: unknown error"));
-        }
-
-        $this->response(200, "Ticket: ".$ticket->getNumber()." status changed to ".$data['state']." succesfully");
-    }
-
     function closeTicket($format){
         $data = $this->getRequest($format);
         $ticket = null;
         # Parse request body
         $ticket = $this->getTicket($data);
-        $data += array("state" => "closed");
+        $data['state'] = "closed";
         $this->setTicketState($data,$ticket);
     }
 
@@ -219,10 +201,8 @@ class TicketApiController extends ApiController {
         # Parse request body
         $ticket = $this->getTicket($data);
         $isClosed = $ticket->isClosed();
-        $file = fopen("reopen.txt","w");
-        fwrite($file,"0000".PHP_EOL.(int)$isClosed);
         if($isClosed){
-            $data += array("state" => "open");
+            $data['state'] = "open";
             $this->setTicketState($data,$ticket);
         }else{
             return $this->exerr(400, __("Can not reopen ticket: ticket is not closed"));
@@ -269,18 +249,28 @@ class TicketApiController extends ApiController {
         } else {
             $data = $this->getRequest($format);
             $staff = $this->_getStaff($data);
-            $tickets = Ticket::objects()->filter(array('staff_id'=>$staff->getId()));
-            $res = array();
-            foreach($tickets as $ticket){
-                array_push($res,$ticket);
+            $page = 1;
+            $limit = 25;
+            if(isset($data['page']) && $data['page'] > 0)
+                $page = $data['page'];
+            if(isset($data['limit']) && $data['limit'] > 0)
+                $limit = $data['limit'];
+            $pagination = new Pagenate(PHP_INT_MAX, $page, $limit);
+            //$page = $pagination->paginateSimple($query->getQuery());
+            $page = Ticket::objects()->filter(array('staff_id'=>$staff->getId()))->limit($pagination->getLimit())->offset($pagination->getStart());
+            $tickets = array();
+            foreach($page as $ticket){
+                array_push($tickets,$ticket);
             }
+
+            $result = array("total"=>count($tickets),"result"=>$tickets);
             # Parse request body
         }
 
-        if(!$res)
+        if(!$result)
             return $this->exerr(500, __("Unable to find staff tickets: unknown error"));
 
-        $this->response(200, json_encode($res),$contentType="application/json");
+        $this->response(200, json_encode($result),$contentType="application/json");
     }
 
     function assignTicket($format){
@@ -294,17 +284,118 @@ class TicketApiController extends ApiController {
         } else {
             $data = $this->getRequest($format);
             $ticket = $this->getTicket($data);
-            if(isset($data['staffUserName'])){
+            if(isset($data['staffUserName']) || isset($data['staff_id'])){
                 $staff = $this->_getStaff($data);
                 $isAssigned = $ticket->assignToStaff($staff->getId(),$data['note']);
                 if(!$isAssigned)
                     return $this->exerr(500, __("Unable to assign ticket: unknown error"));
-            } else if(isset($data['teamame'])){
-                $data=$data;
+            } else if(isset($data['team_id'])){
+                $team = Team::lookup($data['team_id']);
+                $isAssigned = $ticket->assignToTeam($team->getId(),$data['note']);
+                if(!$isAssigned)
+                    return $this->exerr(500, __("Unable to assign ticket: unknown error"));
             }
             # Parse request body
         }
-        $this->response(200, "Ticket: ".$data['number']." assigned to ".$data['staffUserName']." succesfully");
+        $this->response(200, "Ticket: ".$data['number']." assigned succesfully");
+    }
+
+    function replyTicket($format) {
+
+        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets())
+            return $this->exerr(401, __('API key not authorized'));
+
+        $ticket = null;
+        if(!strcasecmp($format, 'email')) {
+            # Handle remote piped emails - could be a reply...etc.
+            $ticket = $this->processEmail();
+        } else {
+            # Parse request body
+            $data = $this->getRequest($format);
+            $ticket = $this->getTicket($data);
+            $staff = $this->_getStaff($data);
+            $errors = array();
+            $lock = $ticket->getLock();// ,"lockCode"=>$lock->getCode()
+            if($lock != null){
+                if($lock->getStaffId()!=$staff->getId()){
+                    return $this->exerr(401, __("Action Denied. Ticket is locked by someone else!"));
+                }
+                $data += array("lockCode"=>$lock->getCode());
+            }
+            $data += array("staffId"=>$staff->getId(),"poster"=>$staff);
+            $isReplied = $ticket->postReply($data,$errors);
+        }
+
+        if(!$isReplied)
+            return $this->exerr(500, __("Unable to reply to ticket: unknown error"));
+
+        $this->response(200, "Replied to Ticket: ".$data['number']." succesfully");
+    }
+
+    function postNoteTicket($format) {
+
+        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets())
+            return $this->exerr(401, __('API key not authorized'));
+
+        $ticket = null;
+        if(!strcasecmp($format, 'email')) {
+            # Handle remote piped emails - could be a reply...etc.
+            $ticket = $this->processEmail();
+        } else {
+            # Parse request body
+            $data = $this->getRequest($format);
+            $ticket = $this->getTicket($data);
+            if(isset($data['staffUserName']) || isset($data['staff_id'])){
+                $staff = $this->_getStaff($data);
+            }else {
+                $staff = "API";
+            }
+            if(isset($data['title']) && isset($data['note'])){
+                $isAdded = $ticket->logNote($data['title'],$data['note'],$staff,false);
+            }
+            else{
+                return $this->exerr(400, __("Unable to add new note to ticket: bad request body"));
+            }
+        }
+
+        if($isAdded == false)
+            return $this->exerr(500, __("Unable to create new ticket: unknown error"));
+
+        $this->response(200, "Posted note to ticket: ".$ticket->getNumber()." succesfully.");
+    }
+
+    function transferTicket($format) {
+
+        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets())
+            return $this->exerr(401, __('API key not authorized'));
+
+        $ticket = null;
+        if(!strcasecmp($format, 'email')) {
+            # Handle remote piped emails - could be a reply...etc.
+            $ticket = $this->processEmail();
+        } else {
+            $data = $this->getRequest($format);
+            $ticket = $this->getTicket($data);
+            $form = new TransferForm($data);
+            $errors = array();
+            $isTransferred = $ticket->transfer($form,$errors);
+            if (count($errors)) {
+                if(isset($errors['errno']) && $errors['errno'] == 403)
+                    return $this->exerr(403, __('Transfer denied'));
+                else
+                    return $this->exerr(
+                            400,
+                            __("Unable to transef ticket: validation errors").":\n"
+                            .Format::array_implode(": ", "\n", $errors)
+                            );
+            }
+        }
+
+        if(!$isTransferred)
+            return $this->exerr(500, __("Unable to transfer ticket: unknown error"));
+
+        $result = array("status_code"=>200,"transfer"=>$isTransferred);
+        $this->response(200, json_encode($result));
     }
 
     function ticketSearch($format) {
@@ -383,10 +474,7 @@ class TicketApiController extends ApiController {
             $ticket = $this->processEmail();
         } else {
             $data = $this->getRequest($format);
-            if(isset($data['dept_id']))
-                $query = Ticket::objects()->filter(array("dept_id"=>$data['dept_id']));
-            else
-                return $this->exerr(400, __("No dept_id provided: bad request body"));
+            $query = Ticket::objects()->filter(array("dept_id"=>$data['dept_id']));
             $ticket = $this->_searchTicket($data,$query);
         }
 
@@ -420,79 +508,254 @@ class TicketApiController extends ApiController {
         $this->response(200, json_encode($sla));
     }
 
-    function transferTicket($format) {
+    function getTopic($format) {
 
         if(!($key=$this->requireApiKey()) || !$key->canCreateTickets())
             return $this->exerr(401, __('API key not authorized'));
 
-        $ticket = null;
+        $topic = null;
         if(!strcasecmp($format, 'email')) {
             # Handle remote piped emails - could be a reply...etc.
-            $ticket = $this->processEmail();
+            $topic = $this->processEmail();
         } else {
             $data = $this->getRequest($format);
-            $ticket = $this->getTicket($data);
-            $form = new TransferForm($data);
-            $errors = array();
-            $isTransferred = $ticket->transfer($form,$errors);
-            if (count($errors)) {
-                if(isset($errors['errno']) && $errors['errno'] == 403)
-                    return $this->exerr(403, __('Transfer denied'));
-                else
-                    return $this->exerr(
-                            400,
-                            __("Unable to transef ticket: validation errors").":\n"
-                            .Format::array_implode(": ", "\n", $errors)
-                            );
+            if(isset($data['topic_id']))
+                $topic = Topic::lookup($data['topic_id']);
+            else{
+                $topic = $this->_getTopic($data);
             }
         }
 
-        if(!$isTransferred)
-            return $this->exerr(500, __("Unable to transfer ticket: unknown error"));
+        if(!$topic)
+            return $this->exerr(500, __("Unable to find topic: unknown error"));
 
-        $result = array("status_code"=>200,"transfer"=>$isTransferred);
-        $this->response(200, json_encode($result));
+        $this->response(200, json_encode($topic));
     }
+
+    function threadAction($format) {
+
+        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets())
+            return $this->exerr(401, __('API key not authorized'));
+
+        $threadEntry = null;
+        if(!strcasecmp($format, 'email')) {
+            # Handle remote piped emails - could be a reply...etc.
+            $threadEntry = $this->processEmail();
+        } else {
+            # Parse request body
+            $data = $this->getRequest($format);
+            $threadEntry = $this->triggerThreadAction($data);
+        }
+
+        if(!$threadEntry)
+            return $this->exerr(500, __("Unable to find tickets: unknown error"));
+
+        $this->response(200, json_encode($threadEntry));
+    }
+
+    
 
     /* private helper functions */
 
+    function setTicketState($data,$ticket) {
 
-    function _getSLA($data){
-        // Init =================================================
-        // Declaring variables that we use.
-        $slas = array();        // slas array
-        $pageNumber = 1;        // Result page number
-        $limit = 25;            // Page ticket count limit
-        $criteria = null;       // Search criteria
-        
-        // Check Params =========================================
-        // Set page number if given (Default: 1)
-        if(isset($data['page']))
-            $pageNumber = $data['page'];
-        // Set sla per page limit if given (Default: 25)
-        if(isset($data['limit'])){
-            // Check if limit exceeds max limit
-            if((int)$data['limit'] < 100)
-                $limit = $data['limit'];
-            else
-                return $this->exerr(400, __("Limit can not exceed 100: bad request body")); 
+        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets())
+            return $this->exerr(401, __('API key not authorized'));
+
+        $isChanged = $ticket->setState($data['state']);
+        if($isChanged == false){
+            return $this->exerr(400, __('State not found: Bad request body'));
         }
 
-        // Create pagination for query
-        $pagination = new Pagenate(SLA::objects()->count(), $pageNumber, $limit);
-        $query = SLA::objects()->limit($pagination->getLimit())->offset($pagination->getStart());
-        $page = $pagination->paginateSimple($query);
-        
-        // Get sla information from the page and push it into slas array
-        foreach($page as $sla){
-            array_push($slas,$sla);
+        if(!$ticket){
+            return $this->exerr(500, __("Unable to set ticket state: unknown error"));
         }
 
-        // Clearing up
-        $result = array('total'=>count($slas),'result'=>$slas);
-        return $result;
+        $this->response(200, "Ticket: ".$ticket->getNumber()." status changed to ".$data['state']." succesfully");
     }
 
+    function updateEntry($thread_id,$newThreadBody,$title,$thisstaff,$guard=false) {
+
+        $old = ThreadEntry::lookup($thread_id);
+        $new = ThreadEntryBody::fromFormattedText($newThreadBody, $old->format);
+        if ($new->getClean() == $old->getBody())
+            // No update was performed
+            return $old;
+
+        $entry = ThreadEntry::create(array(
+            // Copy most information from the old entry
+            'poster' => $old->poster,
+            'userId' => $old->user_id,
+            'staffId' => $old->staff_id,
+            'type' => $old->type,
+            'threadId' => $old->thread_id,
+            'recipients' => $old->recipients,
+
+            // Connect the new entry to be a child of the previous
+            'pid' => $old->id,
+
+            // Add in new stuff
+            'title' => Format::htmlchars($title),
+            'body' => $new,
+            'ip_address' => $_SERVER['REMOTE_ADDR'],
+        ));
+
+        if (!$entry)
+            return false;
+
+        // Move the attachments to the new entry
+        $old->attachments->filter(array(
+            'inline' => false,
+        ))->update(array(
+            'object_id' => $entry->id
+        ));
+
+        // Note, anything that points to the $old entry as PID should remain
+        // that way for email header lookups and such to remain consistent
+
+        if ($old->flags & ThreadEntry::FLAG_EDITED
+            // If editing another person's edit, make a new entry
+            and ($old->editor == $thisstaff->getId() && $old->editor_type == 'S')
+            and !($old->flags & ThreadEntry::FLAG_GUARDED)
+        ) {
+            // Replace previous edit --------------------------
+            $original = $old->getParent();
+            // Link the new entry to the old id
+            $entry->pid = $old->pid;
+            // Drop the previous edit, and base this edit off the original
+            $old->delete();
+            $old = $original;
+        }
+
+        // Mark the new entry as edited (but not hidden nor guarded)
+        $entry->flags = ($old->flags & ~(ThreadEntry::FLAG_HIDDEN | ThreadEntry::FLAG_GUARDED))
+            | ThreadEntry::FLAG_EDITED;
+
+        // Guard against deletes on future edit if requested. This is done
+        // if an email was triggered by the last edit. In such a case, it
+        // should not be replaced by a subsequent edit.
+        if ($guard)
+            $entry->flags |= ThreadEntry::FLAG_GUARDED;
+
+        // Log the editor
+        $entry->editor = $thisstaff->getId();
+        $entry->editor_type = 'S';
+
+        // Sort in the same place in the thread
+        $entry->created = $old->created;
+        $entry->updated = SqlFunction::NOW();
+        $entry->save(true);
+
+        // Hide the old entry from the object thread
+        $old->flags |= ThreadEntry::FLAG_HIDDEN;
+        $old->save();
+
+        return $entry;
+    }
+
+    function resend($threadEntry,$data,$staff) {
+        global $cfg;
+
+        if (!($object = $threadEntry->getThread()->getObject()))
+            return false;
+
+        //$vars = $_POST;
+        $dept = $object->getDept();
+        $poster = $threadEntry->getStaff();
+
+        if ($staff && $data['signature'] == 'mine')
+            $signature = $staff->getSignature();
+        elseif ($poster && $data['signature'] == 'theirs')
+            $signature = $poster->getSignature();
+        elseif ($data['signature'] == 'dept' && $dept && $dept->isPublic())
+            $signature = $dept->getSignature();
+        else
+            $signature = '';
+
+        $variables = array(
+            'response' => $threadEntry,
+            'signature' => $signature,
+            'staff' => $threadEntry->getStaff(),
+            'poster' => $threadEntry->getStaff());
+        $options = array('thread' => $threadEntry);
+
+        // Resend response to collabs
+        if (($object instanceof Ticket)
+                && ($email=$dept->getEmail())
+                && ($tpl = $dept->getTemplate())
+                && ($msg=$tpl->getReplyMsgTemplate())) {
+
+            $recipients = json_decode($threadEntry->recipients, true);
+
+            $msg = $object->replaceVars($msg->asArray(),
+                $variables + array('recipient' => $object->getOwner()));
+
+            $attachments = $cfg->emailAttachments()
+                ? $threadEntry->getAttachments() : array();
+            $email->send($object->getOwner(), $msg['subj'], $msg['body'],
+                $attachments, $options, $recipients);
+        }
+        // TODO: Add an option to the dialog
+        if ($object instanceof Task)
+          $object->notifyCollaborators($threadEntry, array('signature' => $signature));
+
+        // Log an event that the item was resent
+        $object->logEvent('resent', array('entry' => $threadEntry->id),$staff);
+
+        $type = array('type' => 'resent');
+        Signal::send('object.edited', $object, $type);
+
+        // Flag the entry as resent
+        $threadEntry->flags |= ThreadEntry::FLAG_RESENT;
+        $threadEntry->save();
+    }
+
+    function triggerThreadAction($data) {
+        // Setting variables
+        $threadEntry = null;
+        $staff = $this->_getStaff($data);
+        $body = null;
+        $title = null;
+        $action = null;
+
+        // Assigning variables if given
+        if(isset($data['thread_id']) && isset($data['body']) && isset($data['action'])){
+            $threadEntry = ThreadEntry::lookup($data['thread_id']);
+            // Check if thread entry exists
+            if(!$threadEntry){
+                return $this->exerr(400, __("No thread entry found with given thread_id: bad request body"));
+            }
+            // assign vars
+            $body = $data['body'];
+            $action = $data['action'];
+            if(isset($data['title']))
+                $title = $data['title'];
+        }else{
+            return $this->exerr(400, __("No thread_id/body/action given: bad request body"));
+        }
+
+        // Take proper action
+        switch($action){
+            case 'edit':
+                $threadEntry = $this->updateEntry($threadEntry->getId(),$body,$title,$staff);
+                break;
+            case 'edit_resend':
+                $threadEntry = $this->updateEntry($threadEntry->getId(),$body,$title,$staff);
+                $this->resend($threadEntry,$data,$staff);
+                break;
+            case 'resend':
+                $this->resend($threadEntry,$data,$staff);
+                break;
+            case 'delete':
+                $threadEntry->delete();
+                break;
+            case 'getThread':
+                $this->response(200, json_encode($threadEntry));
+            default:
+                return $this->exerr(400, __("Unable to find action: bad request body"));
+        }
+        return $threadEntry;
+    }
 
     function _searchTicket($data,$query=null){
         // Init =================================================
@@ -549,6 +812,78 @@ class TicketApiController extends ApiController {
         return $result;
     }
 
+    function _getSLA($data){
+        // Init =================================================
+        // Declaring variables that we use.
+        $slas = array();        // slas array
+        $pageNumber = 1;        // Result page number
+        $limit = 25;            // Page ticket count limit
+        $criteria = null;       // Search criteria
+        
+        // Check Params =========================================
+        // Set page number if given (Default: 1)
+        if(isset($data['page']))
+            $pageNumber = $data['page'];
+        // Set sla per page limit if given (Default: 25)
+        if(isset($data['limit'])){
+            // Check if limit exceeds max limit
+            if((int)$data['limit'] < 100)
+                $limit = $data['limit'];
+            else
+                return $this->exerr(400, __("Limit can not exceed 100: bad request body")); 
+        }
+
+        // Create pagination for query
+        $pagination = new Pagenate(SLA::objects()->count(), $pageNumber, $limit);
+        $query = SLA::objects()->limit($pagination->getLimit())->offset($pagination->getStart());
+        $page = $pagination->paginateSimple($query);
+        
+        // Get sla information from the page and push it into slas array
+        foreach($page as $sla){
+            array_push($slas,$sla);
+        }
+
+        // Clearing up
+        $result = array('total'=>count($slas),'result'=>$slas);
+        return $result;
+    }
+
+    function _getTopic($data){
+        // Init =================================================
+        // Declaring variables that we use.
+        $topics = array();        // topics array
+        $pageNumber = 1;        // Result page number
+        $limit = 25;            // Page ticket count limit
+        $criteria = null;       // Search criteria
+        
+        // Check Params =========================================
+        // Set page number if given (Default: 1)
+        if(isset($data['page']))
+            $pageNumber = $data['page'];
+        // Set topics per page limit if given (Default: 25)
+        if(isset($data['limit'])){
+            // Check if limit exceeds max limit
+            if((int)$data['limit'] < 100)
+                $limit = $data['limit'];
+            else
+                return $this->exerr(400, __("Limit can not exceed 100: bad request body")); 
+        }
+
+        // Create pagination for query
+        $pagination = new Pagenate(Topic::objects()->count(), $pageNumber, $limit);
+        $query = Topic::objects()->limit($pagination->getLimit())->offset($pagination->getStart());
+        $page = $pagination->paginateSimple($query);
+        
+        // Get topic information from the page and push it into topics array
+        foreach($page as $topic){
+            array_push($topics,$topic);
+        }
+
+        // Clearing up
+        $result = array('total'=>count($topics),'result'=>$topics);
+        return $result;
+    }
+
     function createTicket($data) {
 
         # Pull off some meta-data
@@ -580,10 +915,11 @@ class TicketApiController extends ApiController {
     }
 
     function getTicket($data) {
-        $hasNumber = isset($data['number']);
+        $hasId = isset($data['ticket_id']);
         $ticket = null;
-        if($hasNumber){
-            $ticket = Ticket::lookup(array('number' => $data['number']));
+        $query = array();
+        if($hasId){
+            $ticket = Ticket::lookup($data['ticket_id']);
             if(!$ticket)
                 return $this->exerr(400, __("Unable to find ticket: bad ticket number"));
         }else{
@@ -618,81 +954,17 @@ class TicketApiController extends ApiController {
     }
 
     function _getStaff($data){
-        $hasUserName = isset($data['staffUserName']);
         $staff = null;
-        if($hasUserName){
+        if(isset($data['staffUserName'])){
             $staff = Staff::lookup(array('username' => $data['staffUserName']));
-            if(!$staff)
-                return $this->exerr(400, __("Unable to find staff: bad staff username"));
+        }else if(isset($data['staff_id'])){
+            $staff = Staff::lookup($data['staff_id']);
+        }else if(!$staff){
+            return $this->exerr(400, __("Unable to find staff: bad staff username or staff id"));
         }else{
-            return $this->exerr(400, __("No username provided: bad request body"));
+            return $this->exerr(400, __("No username or id provided: bad request body"));
         }
-
         return $staff;
-    }
-    
-    function replyTicket($format) {
-
-        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets())
-            return $this->exerr(401, __('API key not authorized'));
-
-        $ticket = null;
-        if(!strcasecmp($format, 'email')) {
-            # Handle remote piped emails - could be a reply...etc.
-            $ticket = $this->processEmail();
-        } else {
-            # Parse request body
-            $data = $this->getRequest($format);
-            $ticket = $this->getTicket($data);
-            $staff = $this->_getStaff($data);
-            $errors = array();
-            $lock = $ticket->getLock();// ,"lockCode"=>$lock->getCode()
-            if($lock != null){
-                if($lock->getStaffId()!=$staff->getId()){
-                    return $this->exerr(401, __("Action Denied. Ticket is locked by someone else!"));
-                }
-                $data += array("lockCode"=>$lock->getCode());
-            }
-            $data += array("staffId"=>$staff->getId(),"poster"=>$staff);
-            $isReplied = $ticket->postReply($data,$errors);
-        }
-
-        if(!$isReplied)
-            return $this->exerr(500, __("Unable to reply to ticket: unknown error"));
-
-        $this->response(200, "Replied to Ticket: ".$data['number']." succesfully");
-    }
-
-    function postNoteTicket($format) {
-
-        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets())
-            return $this->exerr(401, __('API key not authorized'));
-
-        $ticket = null;
-        if(!strcasecmp($format, 'email')) {
-            # Handle remote piped emails - could be a reply...etc.
-            $ticket = $this->processEmail();
-        } else {
-            # Parse request body
-            $data = $this->getRequest($format);
-            $ticket = $this->getTicket($data);
-            if(isset($data['staffUserName'])){
-                $staff = $this->_getStaff($data);
-            }else {
-                $staff = "API";
-            }
-            if(isset($data['title']) && isset($data['note'])){
-                $isAdded = $ticket->logNote($data['title'],$data['note'],$staff,false);
-            }
-            else{
-                return $this->exerr(400, __("Unable to add new note to ticket: bad request body"));
-            }
-        }
-
-        if($isAdded == false)
-            return $this->exerr(500, __("Unable to create new ticket: unknown error"));
-
-        $this->response(200, "Posted note to ticket: ".$ticket->getNumber()." succesfully.");
     }
 
     function processEmail($data=false) {
