@@ -666,6 +666,149 @@ class TicketApiController extends ApiController {
         $this->response(200, json_encode($isDeleted));
     }
 
+    function createUser($format) {
+
+        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets())
+            return $this->exerr(401, __('API key not authorized'));
+
+        $user = null;
+        if(!strcasecmp($format, 'email')) {
+            # Handle remote piped emails - could be a reply...etc.
+            $user = $this->processEmail();
+        } else {
+            $data = $this->getRequest($format);
+            $errors = array();
+            $user = User::fromVars($data);
+            if(!$user)
+                return $this->exerr(400, __("Unable to create user: bad request body")); 
+            $user->register($data,$errors);
+            if (count($errors)) {
+                if(isset($errors['errno']) && $errors['errno'] == 403)
+                    return $this->exerr(403, __('Role denied'));
+                else
+                    return $this->exerr(
+                            400,
+                            __("Unable to create new role: validation errors").":\n"
+                            .Format::array_implode(": ", "\n", $errors)
+                            );
+            }
+        }
+        if(!$user)
+            return $this->exerr(500, __("Unable to create user: unknown error"));
+
+        $this->response(200, json_encode($user));
+    }
+    
+    function getUser($format) {
+
+        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets())
+            return $this->exerr(401, __('API key not authorized'));
+
+        $user = null;
+        if(!strcasecmp($format, 'email')) {
+            # Handle remote piped emails - could be a reply...etc.
+            $user = $this->processEmail();
+        } else {
+            $data = $this->getRequest($format);
+            //$role = Role::create();
+            //$errors = array();
+            //$role->update($data,$errors);
+            //$file = fopen()
+            //$form = UserForm::getUserForm()->getForm($data);
+            $user = $this->_getUser($data);
+        }
+        if(!$user)
+            return $this->exerr(500, __("Unable to get users: unknown error"));
+
+        $this->response(200, json_encode($user));
+    }
+
+    function updateUser($format) {
+
+        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets())
+            return $this->exerr(401, __('API key not authorized'));
+
+        $user = null;
+        if(!strcasecmp($format, 'email')) {
+            # Handle remote piped emails - could be a reply...etc.
+            $user = $this->processEmail();
+        } else {
+            $data = $this->getRequest($format);
+            if(isset($data['user_id']))
+                $user = User::lookup($data['user_id']);
+            else if(isset($data['email']))
+                $user = User::lookup(array('email'=>$data['email']));
+            else
+                return $this->exerr(400, __("Unable to update user: bad request body"));
+            $errors = array();
+            $isUpdated = $user->updateInfo($data,$errors);
+        }
+        if(!$isUpdated)
+            return $this->exerr(500, __("Unable to update user: unknown error"));
+
+        $this->response(200, json_encode($isUpdated));
+    }
+
+    function lockUser($format) {
+
+        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets())
+            return $this->exerr(401, __('API key not authorized'));
+
+        $user = null;
+        if(!strcasecmp($format, 'email')) {
+            # Handle remote piped emails - could be a reply...etc.
+            $user = $this->processEmail();
+        } else {
+            $data = $this->getRequest($format);
+            if(isset($data['user_id'])){
+                $user = UserAccount::lookup($data['user_id']);
+            } else if(isset($data['email'])){
+                $user = UserAccount::lookup(array('email'=>$data['email']));
+            } else{
+                return $this->exerr(400, __("Unable to lock user: bad request body"));
+            }
+            
+            if($user->isLocked()){
+                return $this->exerr(400, __("Unable to lock user: already locked"));
+            }
+            $isLocked = $user->lock();
+        }
+        if(!$isLocked)
+            return $this->exerr(500, __("Unable to lock user: unknown error"));
+
+        $this->response(200, json_encode($isLocked));
+    }
+
+    function unlockUser($format) {
+
+        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets())
+            return $this->exerr(401, __('API key not authorized'));
+
+        $user = null;
+        if(!strcasecmp($format, 'email')) {
+            # Handle remote piped emails - could be a reply...etc.
+            $user = $this->processEmail();
+        } else {
+            $data = $this->getRequest($format);
+            if(isset($data['user_id']))
+                $user = UserAccount::lookup($data['user_id']);
+            else if(isset($data['email']))
+                $user = UserAccount::lookup(array('email'=>$data['email']));
+            else
+                return $this->exerr(400, __("Unable to unlock user: bad request body"));
+            
+            if(!$user->isLocked()){
+                return $this->exerr(400, __("Unable to unlock user: already unlocked"));
+            }
+            $isLocked = $user->unlock();
+        }
+        if(!$isLocked)
+            return $this->exerr(500, __("Unable to unlock user: unknown error"));
+
+        $this->response(200, json_encode($isLocked));
+    }
+    
+
     
 
     /* private helper functions */
