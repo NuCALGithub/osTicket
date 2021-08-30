@@ -1,9 +1,9 @@
 <?php
 
 include_once INCLUDE_DIR.'class.api.php';
-include_once INCLUDE_DIR.'class.user.php';
+include_once INCLUDE_DIR.'class.organization.php';
 
-class UserApiController extends ApiController {
+class OrgApiController extends ApiController {
 
     # Supported arguments -- anything else is an error. These items will be
     # inspected _after_ the fixup() method of the ApiXxxDataParser classes
@@ -102,211 +102,108 @@ class UserApiController extends ApiController {
         return true;
     }
 
-    function getSLA($format) {
+    function createOrg($format) {
 
         if(!($key=$this->requireApiKey()) || !$key->canCreateTickets())
             return $this->exerr(401, __('API key not authorized'));
 
-        $sla = null;
+        $org = null;
         if(!strcasecmp($format, 'email')) {
             # Handle remote piped emails - could be a reply...etc.
-            $sla = $this->processEmail();
+            $org = $this->processEmail();
         } else {
-            $data = $this->getRequest($format);
-            if(isset($data['sla_id']))
-                $sla = SLA::lookup($data['sla_id']);
-            else{
-                $sla = $this->_getSLA($data);
-            }
-        }
-
-        if(!$sla)
-            return $this->exerr(500, __("Unable to find SLA plans: unknown error"));
-
-        $this->response(200, json_encode($sla));
-    }
-
-    function createUser($format) {
-
-        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets())
-            return $this->exerr(401, __('API key not authorized'));
-
-        $user = null;
-        if(!strcasecmp($format, 'email')) {
-            # Handle remote piped emails - could be a reply...etc.
-            $user = $this->processEmail();
-        } else {
+            # Parse request body
             $data = $this->getRequest($format);
             $errors = array();
-            $user = User::fromVars($data);
-            if(!$user)
-                return $this->exerr(400, __("Unable to create user: bad request body")); 
-            $user->register($data,$errors);
-            if (count($errors)) {
-                if(isset($errors['errno']) && $errors['errno'] == 403)
-                    return $this->exerr(403, __('Role denied'));
-                else
-                    return $this->exerr(
-                            400,
-                            __("Unable to create new role: validation errors").":\n"
-                            .Format::array_implode(": ", "\n", $errors)
-                            );
-            }
+            $org = Organization::fromVars($data);
         }
-        if(!$user)
-            return $this->exerr(500, __("Unable to create user: unknown error"));
 
-        $this->response(200, json_encode($user));
+        if(!$org)
+            return $this->exerr(500, __("Unable to create new department: unknown error"));
+
+        $result = array("created"=>true,"details"=>$org);
+        $this->response(201, json_encode($result));
     }
-    
-    function getUser($format) {
 
+    function updateOrg($format) {
         if(!($key=$this->requireApiKey()) || !$key->canCreateTickets())
             return $this->exerr(401, __('API key not authorized'));
 
-        $user = null;
+        $org = null;
         if(!strcasecmp($format, 'email')) {
             # Handle remote piped emails - could be a reply...etc.
-            $user = $this->processEmail();
+            $org = $this->processEmail();
         } else {
+        # Parse request body
             $data = $this->getRequest($format);
-            //$role = Role::create();
-            //$errors = array();
-            //$role->update($data,$errors);
-            //$file = fopen()
-            //$form = UserForm::getUserForm()->getForm($data);
-            $user = $this->_getUser($data);
-        }
-        if(!$user)
-            return $this->exerr(500, __("Unable to get users: unknown error"));
-
-        $this->response(200, json_encode($user));
-    }
-
-    function updateUser($format) {  
-
-        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets())
-            return $this->exerr(401, __('API key not authorized'));
-
-        $user = null;
-        if(!strcasecmp($format, 'email')) {
-            # Handle remote piped emails - could be a reply...etc.
-            $user = $this->processEmail();
-        } else {
-            $data = $this->getRequest($format);
-            if(isset($data['user_id']))
-                $user = User::lookup($data['user_id']);
-            else if(isset($data['email']))
-                $user = User::lookup(array('email'=>$data['email']));
-            else
-                return $this->exerr(400, __("Unable to update user: bad request body"));
             $errors = array();
-            $isUpdated = $user->updateInfo($data,$errors);
+            $isUpdated = $this->_updateOrg($data,$errors);
         }
+
         if(!$isUpdated)
-            return $this->exerr(500, __("Unable to update user: unknown error"));
+            return $this->exerr(500, __("Unable to update dept: unknown error"));
 
-        $this->response(200, json_encode($isUpdated));
+        $result = array("updated"=>$isUpdated);
+        $this->response(200, json_encode($result));
     }
 
-    function lockUser($format) {
+    function deleteOrg($format) {
 
         if(!($key=$this->requireApiKey()) || !$key->canCreateTickets())
             return $this->exerr(401, __('API key not authorized'));
 
-        $user = null;
+        $org = null;
         if(!strcasecmp($format, 'email')) {
             # Handle remote piped emails - could be a reply...etc.
-            $user = $this->processEmail();
+            $org = $this->processEmail();
         } else {
+        # Parse request body
             $data = $this->getRequest($format);
-            if(isset($data['user_id'])){
-                $user = UserAccount::lookup($data['user_id']);
-            } else if(isset($data['email'])){
-                $user = UserAccount::lookup(array('email'=>$data['email']));
-            } else{
-                return $this->exerr(400, __("Unable to lock user: bad request body"));
-            }
-            
-            if($user->isLocked()){
-                return $this->exerr(400, __("Unable to lock user: already locked"));
-            }
-            $isLocked = $user->lock();
+            $errors = array();
+            if(isset($data['org_id'])){
+                $org = Organization::lookup($data['org_id']);
+                if($org)
+                    $isDeleted = $org->delete();
+                else
+                    return $this->exerr(400, __("Unable to delete department: no org found with given org_id"));
+            }else
+                return $this->exerr(500, __("Unable to delete department: no org_id provided"));
         }
-        if(!$isLocked)
-            return $this->exerr(500, __("Unable to lock user: unknown error"));
 
-        $this->response(200, json_encode($isLocked));
-    }
+        if(!$isDeleted)
+            return $this->exerr(500, __("Unable to delete org: unknown error"));
 
-    function unlockUser($format) {
-
-        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets())
-            return $this->exerr(401, __('API key not authorized'));
-
-        $user = null;
-        if(!strcasecmp($format, 'email')) {
-            # Handle remote piped emails - could be a reply...etc.
-            $user = $this->processEmail();
-        } else {
-            $data = $this->getRequest($format);
-            if(isset($data['user_id']))
-                $user = UserAccount::lookup($data['user_id']);
-            else if(isset($data['email']))
-                $user = UserAccount::lookup(array('email'=>$data['email']));
-            else
-                return $this->exerr(400, __("Unable to unlock user: bad request body"));
-            
-            if(!$user->isLocked()){
-                return $this->exerr(400, __("Unable to unlock user: already unlocked"));
-            }
-            $isLocked = $user->unlock();
-        }
-        if(!$isLocked)
-            return $this->exerr(500, __("Unable to unlock user: unknown error"));
-
-        $this->response(200, json_encode($isLocked));
+        $result = array("deleted"=>$isDeleted);
+        $this->response(200, json_encode($result));
     }
     
 
     /* private helper functions */
 
-    function _getUser($data){
-        // Init =================================================
-        // Declaring variables that we use.
-        $users = array();        // users array
-        $pageNumber = 1;        // Result page number
-        $limit = 25;            // Page ticket count limit
-        $criteria = null;       // Search criteria
+    function _updateOrg($data,$errors){
+        if(isset($data['org_id'])){
+            $org = Organization::lookup($data['org_id']);
+        }else
+            return $this->exerr(400, __("Unable to update department: no id provided"));
         
-        // Check Params =========================================
-        // Set page number if given (Default: 1)
-        if(isset($data['page']))
-            $pageNumber = $data['page'];
-        // Set users per page limit if given (Default: 25)
-        if(isset($data['limit'])){
-            // Check if limit exceeds max limit
-            if((int)$data['limit'] < 100)
-                $limit = $data['limit'];
-            else
-                return $this->exerr(400, __("Limit can not exceed 100: bad request body")); 
+        if($org){
+            $isUpdated = $org->update($data,$errors);
+            if (count($errors)) {
+                if(isset($errors['errno']) && $errors['errno'] == 403)
+                    return $this->exerr(403, __('Update denied'));
+                else
+                    return $this->exerr(
+                            400,
+                            __("Unable to update department: validation errors").":\n"
+                            .Format::array_implode(": ", "\n", $errors)
+                            );
+            }
+        }else{
+            return $this->exerr(400, __("Unable to update department: no org found with given id"));
         }
 
-        // Create pagination for query
-        $pagination = new Pagenate(User::objects()->count(), $pageNumber, $limit);
-        $query = User::objects()->limit($pagination->getLimit())->offset($pagination->getStart());
-        //$page = $pagination->paginateSimple($query);
-        
-        // Get user information from the page and push it into users array
-        foreach($query as $user){
-            array_push($users,$user);
-        }
-
-        // Clearing up
-        $result = array('total'=>count($users),'result'=>$users);
-        return $result;
+        return true;
     }
-
 
     function processEmail($data=false) {
 
@@ -342,7 +239,7 @@ class UserApiController extends ApiController {
 }
 
 //Local email piping controller - no API key required!
-class PipeApiController extends UserApiController {
+class PipeApiController extends OrgApiController {
 
     //Overwrite grandparent's (ApiController) response method.
     function response($code, $resp, $contentType="text/plain") {

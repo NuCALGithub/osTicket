@@ -291,7 +291,7 @@ class RoleApiController extends ApiController {
 class PipeApiController extends RoleApiController {
 
     //Overwrite grandparent's (ApiController) response method.
-    function response($code, $resp) {
+    function response($code, $resp, $contentType="text/plain") {
 
         //Use postfix exit codes - instead of HTTP
         switch($code) {

@@ -120,7 +120,7 @@ class TicketApiController extends ApiController {
         if(!$ticket)
             return $this->exerr(500, __("Unable to create new ticket: unknown error"));
 
-        $this->response(201, $ticket->getNumber());
+        $this->response(201, $ticket->getNumber(),$contentType="application/json");
     }
 
     function get($format) {
@@ -184,7 +184,7 @@ class TicketApiController extends ApiController {
             return $this->exerr(500, __("Unable to delete ticket: unknown error"));
 
         $result = array("deleted"=>true,"ticket_id"=>$data['ticket_id']);
-        $this->response(200, json_encode($result));
+        $this->response(200, json_encode($result),$contentType="application/json");
     }
 
     function closeTicket($format){
@@ -309,7 +309,7 @@ class TicketApiController extends ApiController {
             # Parse request body
         }
         
-        $this->response(200, json_encode($result));
+        $this->response(200, json_encode($result),$contentType="application/json");
     }
 
     function replyTicket($format) {
@@ -343,7 +343,7 @@ class TicketApiController extends ApiController {
             return $this->exerr(500, __("Unable to reply to ticket: unknown error"));
 
         $result = array('ticket_id'=>$ticket->getId(),'staff_id'=>$staff->getId(),'isPosted'=>true,'postedReply'=>$isReplied);
-        $this->response(200, json_encode($result));
+        $this->response(200, json_encode($result),$contentType="application/json");
     }
 
     function postNoteTicket($format) {
@@ -381,7 +381,7 @@ class TicketApiController extends ApiController {
         $result['isPosted'] = true;
         $result['postedNote'] = $isAdded;
 
-        $this->response(200, json_encode($result));
+        $this->response(200, json_encode($result),$contentType="application/json");
     }
 
     function transferTicket($format) {
@@ -415,7 +415,7 @@ class TicketApiController extends ApiController {
             return $this->exerr(500, __("Unable to transfer ticket: unknown error"));
 
         $result = array("status_code"=>200,"transfer"=>$isTransferred);
-        $this->response(200, json_encode($result));
+        $this->response(200, json_encode($result),$contentType="application/json");
     }
 
     function ticketSearch($format) {
@@ -434,7 +434,7 @@ class TicketApiController extends ApiController {
         if(!$ticket)
             return $this->exerr(500, __("Unable to find tickets: unknown error"));
 
-        $this->response(200, json_encode($ticket));
+        $this->response(200, json_encode($ticket),$contentType="application/json");
     }
 
     function ticketHaveOrg($format) {
@@ -455,7 +455,7 @@ class TicketApiController extends ApiController {
         if(!$ticket)
             return $this->exerr(500, __("Unable to find tickets: unknown error"));
 
-        $this->response(200, json_encode($ticket));
+        $this->response(200, json_encode($ticket),$contentType="application/json");
     }
 
     function orgTickets($format) {
@@ -480,7 +480,7 @@ class TicketApiController extends ApiController {
         if(!$ticket)
             return $this->exerr(500, __("Unable to find tickets: unknown error"));
 
-        $this->response(200, json_encode($ticket));
+        $this->response(200, json_encode($ticket),$contentType="application/json");
     }
 
     function deptTickets($format) {
@@ -501,7 +501,7 @@ class TicketApiController extends ApiController {
         if(!$ticket)
             return $this->exerr(500, __("Unable to find tickets: unknown error"));
 
-        $this->response(200, json_encode($ticket));
+        $this->response(200, json_encode($ticket),$contentType="application/json");
     }
 
     function getSLA($format) {
@@ -525,7 +525,7 @@ class TicketApiController extends ApiController {
         if(!$sla)
             return $this->exerr(500, __("Unable to find SLA plans: unknown error"));
 
-        $this->response(200, json_encode($sla));
+        $this->response(200, json_encode($sla),$contentType="application/json");
     }
 
     function getTopic($format) {
@@ -549,7 +549,7 @@ class TicketApiController extends ApiController {
         if(!$topic)
             return $this->exerr(500, __("Unable to find topic: unknown error"));
 
-        $this->response(200, json_encode($topic));
+        $this->response(200, json_encode($topic),$contentType="application/json");
     }
 
     function threadAction($format) {
@@ -570,7 +570,7 @@ class TicketApiController extends ApiController {
         if(!$threadEntry)
             return $this->exerr(500, __("Unable to find tickets: unknown error"));
 
-        $this->response(200, json_encode($threadEntry));
+        $this->response(200, json_encode($threadEntry),$contentType="application/json");
     }
     
 
@@ -591,7 +591,7 @@ class TicketApiController extends ApiController {
         }
 
         $result = array("changed"=>$isChanged,"state"=>$data['state'],"ticket_id"=>$ticket->getId());
-        $this->response(200, json_encode($result));
+        $this->response(200, json_encode($result),$contentType="application/json");
     }
 
     function updateEntry($thread_id,$newThreadBody,$title,$thisstaff,$guard=false) {
@@ -758,23 +758,42 @@ class TicketApiController extends ApiController {
         switch($action){
             case 'edit':
                 $threadEntry = $this->updateEntry($threadEntry->getId(),$body,$title,$staff);
-                $this->response(200, json_encode(array("action"=>"edit","status"=>"edited","thread_id"=>$threadEntry->getId(),"thread"=>$threadEntry)));
+                $this->response(200, 
+                                json_encode(array("action"=>"edit",
+                                                  "status"=>"edited",
+                                                  "thread_id"=>$threadEntry->getId(),
+                                                  "thread"=>$threadEntry))
+                                ,$contentType="application/json");
                 break;
             case 'edit_resend':
                 $threadEntry = $this->updateEntry($threadEntry->getId(),$body,$title,$staff);
                 $this->resend($threadEntry,$data,$staff);
-                $this->response(200, json_encode(array("action"=>"edit_resend","status"=>"edited/resent","thread_id"=>$threadEntry->getId(),"thread"=>$threadEntry)));
+                $this->response(200, 
+                                json_encode(array("action"=>"edit_resend",
+                                                  "status"=>"edited/resent",
+                                                  "thread_id"=>$threadEntry->getId(),
+                                                  "thread"=>$threadEntry))
+                                ,$contentType="application/json");
                 break;
             case 'resend':
                 $this->resend($threadEntry,$data,$staff);
-                $this->response(200, json_encode(array("action"=>"resend","status"=>"resent","thread_id"=>$threadEntry->getId(),"thread"=>$threadEntry)));
+                $this->response(200, 
+                                json_encode(array("action"=>"resend",
+                                                  "status"=>"resent",
+                                                  "thread_id"=>$threadEntry->getId(),
+                                                  "thread"=>$threadEntry))
+                                ,$contentType="application/json");
                 break;
             case 'delete':
                 $threadEntry->delete();
-                $this->response(200, json_encode(array("action"=>"delete","status"=>"deleted","thread_id"=>$threadEntry->getId())));
+                $this->response(200, 
+                                json_encode(array("action"=>"delete",
+                                                  "status"=>"deleted",
+                                                  "thread_id"=>$threadEntry->getId()))
+                                ,$contentType="application/json");
                 break;
             case 'getThread':
-                $this->response(200, json_encode($threadEntry));
+                $this->response(200, json_encode($threadEntry),$contentType="application/json");
             default:
                 return $this->exerr(400, __("Unable to find action: bad request body"));
         }
@@ -1028,7 +1047,7 @@ class TicketApiController extends ApiController {
 class PipeApiController extends TicketApiController {
 
     //Overwrite grandparent's (ApiController) response method.
-    function response($code, $resp) {
+    function response($code, $resp,$contentType="text/plain") {
 
         //Use postfix exit codes - instead of HTTP
         switch($code) {
