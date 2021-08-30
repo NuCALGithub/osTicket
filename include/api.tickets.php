@@ -183,7 +183,8 @@ class TicketApiController extends ApiController {
         if(!$isDeleted)
             return $this->exerr(500, __("Unable to delete ticket: unknown error"));
 
-        $this->response(200, "Ticket deleted succesfully");
+        $result = array("deleted"=>true,"ticket_id"=>$data['ticket_id']);
+        $this->response(200, json_encode($result));
     }
 
     function closeTicket($format){
@@ -289,15 +290,26 @@ class TicketApiController extends ApiController {
                 $isAssigned = $ticket->assignToStaff($staff->getId(),$data['note']);
                 if(!$isAssigned)
                     return $this->exerr(500, __("Unable to assign ticket: unknown error"));
+                $result = array(
+                    "assigned"=>true,
+                    "ticket"=>$data['ticket_id'],
+                    "staff_id"=>$staff->getId(),
+                    "staff_name"=>$staff->getFirstName()." ".$staff->getLastName());
             } else if(isset($data['team_id'])){
                 $team = Team::lookup($data['team_id']);
                 $isAssigned = $ticket->assignToTeam($team->getId(),$data['note']);
                 if(!$isAssigned)
                     return $this->exerr(500, __("Unable to assign ticket: unknown error"));
+                $result = array(
+                    "assigned"=>true,
+                    "ticket"=>$data['ticket_id'],
+                    "team_id"=>$data['team_id'],
+                    "team_name"=>$team->__toString());
             }
             # Parse request body
         }
-        $this->response(200, "Ticket: ".$data['number']." assigned succesfully");
+        
+        $this->response(200, json_encode($result));
     }
 
     function replyTicket($format) {
@@ -306,6 +318,7 @@ class TicketApiController extends ApiController {
             return $this->exerr(401, __('API key not authorized'));
 
         $ticket = null;
+        $result = array();
         if(!strcasecmp($format, 'email')) {
             # Handle remote piped emails - could be a reply...etc.
             $ticket = $this->processEmail();
@@ -329,7 +342,8 @@ class TicketApiController extends ApiController {
         if(!$isReplied)
             return $this->exerr(500, __("Unable to reply to ticket: unknown error"));
 
-        $this->response(200, "Replied to Ticket: ".$data['number']." succesfully");
+        $result = array('ticket_id'=>$ticket->getId(),'staff_id'=>$staff->getId(),'isPosted'=>true,'postedReply'=>$isReplied);
+        $this->response(200, json_encode($result));
     }
 
     function postNoteTicket($format) {
@@ -338,6 +352,7 @@ class TicketApiController extends ApiController {
             return $this->exerr(401, __('API key not authorized'));
 
         $ticket = null;
+        $result = array();
         if(!strcasecmp($format, 'email')) {
             # Handle remote piped emails - could be a reply...etc.
             $ticket = $this->processEmail();
@@ -345,10 +360,13 @@ class TicketApiController extends ApiController {
             # Parse request body
             $data = $this->getRequest($format);
             $ticket = $this->getTicket($data);
+            $result['ticket_id'] = $ticket->getId();
             if(isset($data['staffUserName']) || isset($data['staff_id'])){
                 $staff = $this->_getStaff($data);
+                $result['staff_id'] = $staff->getId();
             }else {
                 $staff = "API";
+                $result['staff_id'] = $staff;
             }
             if(isset($data['title']) && isset($data['note'])){
                 $isAdded = $ticket->logNote($data['title'],$data['note'],$staff,false);
@@ -360,8 +378,10 @@ class TicketApiController extends ApiController {
 
         if($isAdded == false)
             return $this->exerr(500, __("Unable to create new ticket: unknown error"));
+        $result['isPosted'] = true;
+        $result['postedNote'] = $isAdded;
 
-        $this->response(200, "Posted note to ticket: ".$ticket->getNumber()." succesfully.");
+        $this->response(200, json_encode($result));
     }
 
     function transferTicket($format) {
@@ -453,8 +473,8 @@ class TicketApiController extends ApiController {
                 $org = OrganizationModel::lookup($data['org_id']);
             else
                 return $this->exerr(400, __("no org_id provided: bad request body"));
-            $data['criteria'] = json_decode("[[\"user__org__name\",\"equal\",\"".$org->getName()."\"]]");
-            $ticket = $this->_searchTicket($data);
+            $query = Ticket::objects()->filter(array('user__org' => $org->getId()));
+            $ticket = $this->_searchTicket($data,$query);
         }
 
         if(!$ticket)
@@ -570,7 +590,8 @@ class TicketApiController extends ApiController {
             return $this->exerr(500, __("Unable to set ticket state: unknown error"));
         }
 
-        $this->response(200, "Ticket: ".$ticket->getNumber()." status changed to ".$data['state']." succesfully");
+        $result = array("changed"=>$isChanged,"state"=>$data['state'],"ticket_id"=>$ticket->getId());
+        $this->response(200, json_encode($result));
     }
 
     function updateEntry($thread_id,$newThreadBody,$title,$thisstaff,$guard=false) {
@@ -737,16 +758,20 @@ class TicketApiController extends ApiController {
         switch($action){
             case 'edit':
                 $threadEntry = $this->updateEntry($threadEntry->getId(),$body,$title,$staff);
+                $this->response(200, json_encode(array("action"=>"edit","status"=>"edited","thread_id"=>$threadEntry->getId(),"thread"=>$threadEntry)));
                 break;
             case 'edit_resend':
                 $threadEntry = $this->updateEntry($threadEntry->getId(),$body,$title,$staff);
                 $this->resend($threadEntry,$data,$staff);
+                $this->response(200, json_encode(array("action"=>"edit_resend","status"=>"edited/resent","thread_id"=>$threadEntry->getId(),"thread"=>$threadEntry)));
                 break;
             case 'resend':
                 $this->resend($threadEntry,$data,$staff);
+                $this->response(200, json_encode(array("action"=>"resend","status"=>"resent","thread_id"=>$threadEntry->getId(),"thread"=>$threadEntry)));
                 break;
             case 'delete':
                 $threadEntry->delete();
+                $this->response(200, json_encode(array("action"=>"delete","status"=>"deleted","thread_id"=>$threadEntry->getId())));
                 break;
             case 'getThread':
                 $this->response(200, json_encode($threadEntry));

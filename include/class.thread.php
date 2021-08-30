@@ -789,7 +789,7 @@ class ThreadEntryMergeInfo extends VerySimpleModel {
 }
 
 class ThreadEntry extends VerySimpleModel
-implements TemplateVariable {
+implements TemplateVariable, JsonSerializable {
     static $meta = array(
         'table' => THREAD_ENTRY_TABLE,
         'pk' => array('id'),
@@ -1861,6 +1861,31 @@ implements TemplateVariable {
         }
         return false;
     }
+
+    public function jsonSerialize() {
+        $editor = $this->getEditor();
+        return [
+            "id" => $this->getId(),
+            "pid" => $this->getPid(),
+            "thread_id" => $this->getThreadId(),
+            "staff_id" => $this->getStaffId() ,
+            "staff_name" => $this->getStaff() ? $this->getStaff()->getFirstName()." ".$this->getStaff()->getLastName(): null ,
+            "user_id" => $this->getUserId() ,
+            "user_name" => $this->getUser() ?  $this->getUser()->getFullName() : null,
+            "type" => $this-> getType(),
+            "poster" => $this->getPoster(),
+            "editor" => $editor ? $editor->getUserName() : null,
+            "source" => $this->getSource(),
+            "title" => $this->getTitle(),
+            "body"=> $this->getBody()->getClean(),
+            "message"=>$this->getMessage(),
+            "format" => $this-> format,
+            "created"=> $this->created ,
+            "updated" => $this->updated
+
+        ];
+    }
+
 
     static $action_registry = array();
 

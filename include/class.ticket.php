@@ -37,7 +37,7 @@ require_once(INCLUDE_DIR.'class.task.php');
 require_once(INCLUDE_DIR.'class.faq.php');
 
 class Ticket extends VerySimpleModel
-implements RestrictedAccess, Threadable, Searchable {
+implements RestrictedAccess, Threadable, Searchable, JsonSerializable {
     static $meta = array(
         'table' => TICKET_TABLE,
         'pk' => array('ticket_id'),
@@ -3891,7 +3891,40 @@ implements RestrictedAccess, Threadable, Searchable {
        Signal::send('model.updated', $this);
 
        return true;
-   }
+    }
+
+    public function jsonSerialize() {
+        $types = array('M', 'R', 'N');
+        $threadTypes=array('M'=>'message','R'=>'response', 'N'=>'note');
+        $thread = $this->getThreadEntries($types);
+        $a = array();
+        foreach ($thread as $tentry) {
+            array_push($a , $tentry);
+        }
+
+        return [
+            'ticket_id' => $this->getId(),
+            'ticket_number' => $this->getNumber(),
+            'subject' => $this->getSubject(),
+            'ticket_status' => $this->getStatus()->getName(),
+            'statusId' => $this->getStatus()->getId(),
+            'priority' => $this->getPriority()->getTag(),
+            'priorityId' => $this->getPriority()->getId(),
+            'department' => $this->getDeptName(),
+            'create_timestamp' => $this->getCreateDate(),
+            'user_name' => $this->getName()->getFull(),
+            'user_email' => $this->getEmail()->__toString(),
+            'user_phone' => $this->getPhoneNumber(),
+            'source' => $this->getSource(),
+            'due_timestamp' => $this->getEstDueDate(),
+            'close_timestamp' => $this->getCloseDate(),
+            'help_topic' => $this->getHelpTopic(),
+            'last_message_timestamp' => $this->getLastMsgDate(),
+            'last_response_timestamp' => $this->getLastRespDate(),
+            'assigned_to' => $this->getAssignees(),
+            'thread_entries' =>$a
+        ];
+    }
 
    /*============== Static functions. Use Ticket::function(params); =============nolint*/
     static function getIdByNumber($number, $email=null, $ticket=false) {
