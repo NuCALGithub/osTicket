@@ -119,8 +119,9 @@ class TicketApiController extends ApiController {
 
         if(!$ticket)
             return $this->exerr(500, __("Unable to create new ticket: unknown error"));
-
-        $this->response(201, $ticket->getNumber(),$contentType="application/json");
+        
+        $result = array("created"=>true,"ticket_id"=>$ticket->getId());
+        $this->response(201, json_encode($result),$contentType="application/json");
     }
 
     function get($format) {
