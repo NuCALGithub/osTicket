@@ -113,7 +113,7 @@ class RoleApiController extends ApiController {
             $role = $this->processEmail();
         } else {
             $data = $this->getRequest($format);
-            if(isset($data['topic_id']))
+            if(isset($data['role_id']))
                 $role = Role::lookup($data['role_id']);
             else{
                 $role = $this->_getRole($data);

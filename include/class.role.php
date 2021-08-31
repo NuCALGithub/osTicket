@@ -76,7 +76,8 @@ class RoleModel extends VerySimpleModel {
 
 }
 
-class Role extends RoleModel {
+class Role extends RoleModel
+implements JsonSerializable {
     var $form;
     var $entry;
 
@@ -206,13 +207,27 @@ class Role extends RoleModel {
         return true;
     }
 
+    public function jsonSerialize() {
+        return [
+            'role_id' => $this->getId(),
+            'role_name' => $this->getName(),
+            'flags' => $this->get('flags'),
+            'permissions' => $this->getPermission()->perms,
+            'notes' => $this->notes
+        ];
+    }
+
     static function create($vars=false) {
+        $file = fopen("role.txt","w");
+        fwrite($file,json_encode($vars));
         $role = new static($vars);
         $role->created = SqlFunction::NOW();
         return $role;
     }
 
     static function __create($vars, &$errors) {
+        $file = fopen("role2.txt","w");
+        fwrite($file,json_encode($vars));
         $role = self::create($vars);
         if ($vars['permissions'])
             $role->updatePerms($vars['permissions']);

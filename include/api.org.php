@@ -125,6 +125,33 @@ class OrgApiController extends ApiController {
         $this->response(201, json_encode($result));
     }
 
+    function getOrg($format) {
+
+        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets())
+            return $this->exerr(401, __('API key not authorized'));
+
+        $org = null;
+        if(!strcasecmp($format, 'email')) {
+            # Handle remote piped emails - could be a reply...etc.
+            $org = $this->processEmail();
+        } else {
+            # Parse request body
+            $data = $this->getRequest($format);
+            $errors = array();
+            if(isset($data['org_id'])){
+                $org = Organization::lookup($data['org_id']);
+
+            }else{
+                $org = $this->_getOrg($data);
+            }
+        }
+
+        if(!$org)
+            return $this->exerr(500, __("Unable to create new department: unknown error"));
+
+        $this->response(200, json_encode($org),$contentType="application/json");
+    }
+
     function updateOrg($format) {
         if(!($key=$this->requireApiKey()) || !$key->canCreateTickets())
             return $this->exerr(401, __('API key not authorized'));
@@ -203,6 +230,42 @@ class OrgApiController extends ApiController {
         }
 
         return true;
+    }
+
+    function _getOrg($data){
+        // Init =================================================
+        // Declaring variables that we use.
+        $orgs = array();        // Orgs array
+        $pageNumber = 1;        // Result page number
+        $limit = 25;            // Page ticket count limit
+        $criteria = null;       // Search criteria
+        
+        // Check Params =========================================
+        // Set page number if given (Default: 1)
+        if(isset($data['page']))
+            $pageNumber = $data['page'];
+        // Set orgs per page limit if given (Default: 25)
+        if(isset($data['limit'])){
+            // Check if limit exceeds max limit
+            if((int)$data['limit'] < 100)
+                $limit = $data['limit'];
+            else
+                return $this->exerr(400, __("Limit can not exceed 100: bad request body")); 
+        }
+
+        // Create pagination for query
+        $pagination = new Pagenate(Organization::objects()->count(), $pageNumber, $limit);
+        $query = Organization::objects()->limit($pagination->getLimit())->offset($pagination->getStart());
+        //$page = $pagination->paginateSimple($query);
+        
+        // Get org information from the page and push it into orgs array
+        foreach($query as $org){
+            array_push($orgs,$org);
+        }
+
+        // Clearing up
+        $result = array('total'=>count($orgs),'result'=>$orgs);
+        return $result;
     }
 
     function processEmail($data=false) {

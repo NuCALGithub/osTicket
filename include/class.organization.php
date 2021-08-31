@@ -178,7 +178,7 @@ class OrganizationCdata extends VerySimpleModel {
 }
 
 class Organization extends OrganizationModel
-implements TemplateVariable, Searchable {
+implements TemplateVariable, Searchable, JsonSerializable {
     var $_entries;
     var $_forms;
     var $_queue;
@@ -564,6 +564,24 @@ implements TemplateVariable, Searchable {
                 return false;
         }
         return true;
+    }
+
+    public function jsonSerialize() {
+        $users = User::objects()->filter(array('org_id'=>$this->getId()));
+        $u = array();
+        foreach($users as $user){
+            array_push($u,$user);
+        }
+        return [
+            'org_id' => $this->getId(),
+            'org_name' => $this->getName(),
+            'manager_id' => $this->getAccountManagerId(),
+            'manager_name' => $this->getAccountManager() ? $this->getAccountManager()->getFullName() : null,
+            'status' => $this->status,
+            'domain' => $this->domain,
+            'extra' => $this->extra,
+            'members' => $u
+        ];
     }
 
     static function getLink($id) {

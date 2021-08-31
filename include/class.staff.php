@@ -23,7 +23,7 @@ include_once(INCLUDE_DIR.'class.user.php');
 include_once(INCLUDE_DIR.'class.auth.php');
 
 class Staff extends VerySimpleModel
-implements AuthenticatedUser, EmailContact, TemplateVariable, Searchable {
+implements AuthenticatedUser, EmailContact, TemplateVariable, Searchable, JsonSerializable {
 
     static $meta = array(
         'table' => STAFF_TABLE,
@@ -959,6 +959,26 @@ implements AuthenticatedUser, EmailContact, TemplateVariable, Searchable {
             ->delete();
 
         return true;
+    }
+
+    public function jsonSerialize() {
+        return [
+            'staff_id' => $this->getId(),
+            'staff_username' => $this->getUserName(),
+            'staff_name' => $this->getFirstName()." ".$this->getLastName(),
+            'dept_id' => $this->getDeptId(),
+            'dept_name' => $this->getDept() ? $this->getDept()->getName() : null,
+            'role_id' => $this->getRole()->getId(),
+            'role_name' => $this->getRole()->getName(),
+            'email' => $this->getEmail(),
+            'phone' => $this->getVar('phone'),
+            'locale' => $this->getLocale(),
+            'user_name' => $this->getName()->getFull(),
+            'active' => $this->isActive(),
+            'admin' => $this->isAdmin(),
+            'permissions' => $this->getPermission()->perms,
+            'extra' => $this->getExtraAttr()
+        ];
     }
 
     /**** Static functions ********/

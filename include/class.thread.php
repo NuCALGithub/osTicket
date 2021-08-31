@@ -1886,7 +1886,6 @@ implements TemplateVariable, JsonSerializable {
         ];
     }
 
-
     static $action_registry = array();
 
     static function registerAction($group, $action) {

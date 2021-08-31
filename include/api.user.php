@@ -155,8 +155,9 @@ class UserApiController extends ApiController {
         }
         if(!$user)
             return $this->exerr(500, __("Unable to create user: unknown error"));
-
-        $this->response(200, json_encode($user));
+        
+        $result = array('created'=>true,'user_id'=>$user->gerId());
+        $this->response(200, json_encode($result),$contentType="application/json");
     }
     
     function getUser($format) {
@@ -170,17 +171,16 @@ class UserApiController extends ApiController {
             $user = $this->processEmail();
         } else {
             $data = $this->getRequest($format);
-            //$role = Role::create();
-            //$errors = array();
-            //$role->update($data,$errors);
-            //$file = fopen()
-            //$form = UserForm::getUserForm()->getForm($data);
-            $user = $this->_getUser($data);
+            if(isset($data['user_id'])){
+                $user = User::lookup($data['user_id']);
+            }else{
+                $user = $this->_getUser($data);
+            }
         }
         if(!$user)
             return $this->exerr(500, __("Unable to get users: unknown error"));
 
-        $this->response(200, json_encode($user));
+        $this->response(200, json_encode($user),$contentType="application/json");
     }
 
     function updateUser($format) {  
@@ -206,7 +206,8 @@ class UserApiController extends ApiController {
         if(!$isUpdated)
             return $this->exerr(500, __("Unable to update user: unknown error"));
 
-        $this->response(200, json_encode($isUpdated));
+        $result = array("updated"=>true,"user_id"=>$user->getId());
+        $this->response(200, json_encode($result),$contentType="application/json");
     }
 
     function lockUser($format) {
@@ -236,7 +237,8 @@ class UserApiController extends ApiController {
         if(!$isLocked)
             return $this->exerr(500, __("Unable to lock user: unknown error"));
 
-        $this->response(200, json_encode($isLocked));
+        $result = array('locked'=>true,'user_id'=>$user->getId());
+        $this->response(200, json_encode($result),$contentType="application/json");
     }
 
     function unlockUser($format) {
@@ -264,8 +266,9 @@ class UserApiController extends ApiController {
         }
         if(!$isLocked)
             return $this->exerr(500, __("Unable to unlock user: unknown error"));
-
-        $this->response(200, json_encode($isLocked));
+            
+        $result = array('locked'=>false,'user_id'=>$user->getId());
+        $this->response(200, json_encode($result),$contentType="application/json");
     }
     
 

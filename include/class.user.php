@@ -208,7 +208,7 @@ class UserCdata extends VerySimpleModel {
 }
 
 class User extends UserModel
-implements TemplateVariable, Searchable {
+implements TemplateVariable, Searchable, JsonSerializable {
 
     var $_email;
     var $_entries;
@@ -677,6 +677,19 @@ implements TemplateVariable, Searchable {
         return true;
     }
 
+    public function jsonSerialize() {
+        return [
+            'user_id' => $this->getId(),
+            'user_name' => $this->getFullName(),
+            'org_id' => $this->getOrgId(),
+            'org_name' => $this->getOrganization() ? $this->getOrganization()->getName() : null,
+            'default_email_id' => $this->getDefaultEmail()->id,
+            'default_email' => $this->getDefaultEmail()->__toString(),
+            'status' => $this->getAccountStatus(),
+            'account' => $this->getAccount()
+        ];
+    }
+
     static function lookupByEmail($email) {
         return static::lookup(array('emails__address'=>$email));
     }
@@ -1058,7 +1071,8 @@ class UserEmail extends UserEmailModel {
 }
 
 
-class UserAccount extends VerySimpleModel {
+class UserAccount extends VerySimpleModel
+implements JsonSerializable {
     static $meta = array(
         'table' => USER_ACCOUNT_TABLE,
         'pk' => array('id'),
@@ -1345,6 +1359,18 @@ class UserAccount extends VerySimpleModel {
         }
 
         return $this->save(true);
+    }
+
+    public function jsonSerialize() {
+        return [
+            'account_id' => $this->getId(),
+            'user_id' => $this->getUserId(),
+            'user_name' => $this->getUser()->getFullName(),
+            'timezone' => $this->getTimezone(),
+            'language' => $this->getLanguage(),
+            'status' => $this->__toString(),
+            'extra' => $this->getExtraAttr()
+        ];
     }
 
     static function createForUser($user, $defaults=false) {

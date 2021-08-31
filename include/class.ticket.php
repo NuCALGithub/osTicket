@@ -3677,6 +3677,9 @@ implements RestrictedAccess, Threadable, Searchable, JsonSerializable {
         ) {
             return false;
         }
+        $file = fopen("updateTicket.txt","w");
+        fwrite($file,json_encode($vars).PHP_EOL);
+        fwrite($file,$vars  .PHP_EOL);
 
         $fields = array();
         $fields['topicId']  = array('type'=>'int',      'required'=>1, 'error'=>__('Help topic selection is required'));
@@ -3891,7 +3894,8 @@ implements RestrictedAccess, Threadable, Searchable, JsonSerializable {
        Signal::send('model.updated', $this);
 
        return true;
-    }
+   }
+
 
     public function jsonSerialize() {
         $types = array('M', 'R', 'N');
@@ -3925,7 +3929,6 @@ implements RestrictedAccess, Threadable, Searchable, JsonSerializable {
             'thread_entries' =>$a
         ];
     }
-
    /*============== Static functions. Use Ticket::function(params); =============nolint*/
     static function getIdByNumber($number, $email=null, $ticket=false) {
 

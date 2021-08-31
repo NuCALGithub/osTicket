@@ -465,6 +465,7 @@ class TicketApiController extends ApiController {
             return $this->exerr(401, __('API key not authorized'));
 
         $ticket = null;
+        //$result = array();
         if(!strcasecmp($format, 'email')) {
             # Handle remote piped emails - could be a reply...etc.
             $ticket = $this->processEmail();
@@ -474,7 +475,14 @@ class TicketApiController extends ApiController {
                 $org = OrganizationModel::lookup($data['org_id']);
             else
                 return $this->exerr(400, __("no org_id provided: bad request body"));
+            //$data['criteria'] = json_decode("[[\"user__org__name\",\"equal\",\"".$org->getName()."\"]]");
             $query = Ticket::objects()->filter(array('user__org' => $org->getId()));
+            /*$result['total'] = count($ticket);
+            $searchedTickets = array();
+            foreach($ticket as $t){
+                array_push($searchedTickets,$t);
+            }
+            $result['result'] = $searchedTickets;*/
             $ticket = $this->_searchTicket($data,$query);
         }
 

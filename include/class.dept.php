@@ -17,7 +17,7 @@ require_once INCLUDE_DIR . 'class.search.php';
 require_once INCLUDE_DIR.'class.role.php';
 
 class Dept extends VerySimpleModel
-implements TemplateVariable, Searchable {
+implements TemplateVariable, JsonSerializable {
 
     static $meta = array(
         'table' => DEPT_TABLE,
@@ -611,6 +611,30 @@ implements TemplateVariable, Searchable {
         //Sort based on name formating
         $members = Staff::nsort($members);
         Export::departmentMembers($dept, $members, $filename);
+    }
+
+    public function jsonSerialize() {
+        return [
+            'dept_id' => $this->getId(),
+            'pid' => $this->getParent() ? $this->getParent()->getId() : null,
+            'dept_name' => $this->getName(),
+            'sla_id' => $this->getSLAId(),
+            'sla_name' => $this->getSLA() ? $this->getSLA()->getName() : null,
+            'schedule_id' => $this->getScheduleId(),
+            'schedule_name' => $this->getSchedule() ? $this->getSchedule()->getName() : null,
+            'manager_id' => $this->getManagerId(),
+            'manager_username' => $this->getManager() ? $this->getManager()->getUsername() : null,
+            'email_id' => $this->getEmailId(),
+            'email' => $this->getEmail()->getEmail(),
+            'autoresp_email_id' => $this->autoresp_email_id,
+            'autoresp_email' => $this->getAutoRespEmail()->getEmail(),
+            'ticket_auto_response' => $this->autoRespONNewTicket(),
+            'message_auto_response' => $this->autoRespONNewMessage(),
+            'isPublic' => $this->isPublic(),
+            'group_membership' => $this->isGroupMembershipEnabled(),
+            'flags' => $this->getVar('flags'),
+            'signature' => $this->getSignature()
+        ];
     }
 
     /*----Static functions-------*/

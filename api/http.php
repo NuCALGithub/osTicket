@@ -57,6 +57,10 @@ $dispatcher = patterns('',
         url_post("^/dept\.create\.(?P<format>xml|json|email)$", array('api.dept.php:DeptApiController','createDept')),
         url_post("^/dept\.update\.(?P<format>xml|json|email)$", array('api.dept.php:DeptApiController','updateDept')),
         url_delete("^/dept\.delete\.(?P<format>xml|json|email)$", array('api.dept.php:DeptApiController','deleteDept')),
+        url_get("^/org\.get\.(?P<format>xml|json|email)$", array('api.org.php:OrgApiController','getOrg')),
+        url_post("^/org\.create\.(?P<format>xml|json|email)$", array('api.org.php:OrgApiController','createOrg')),
+        url_post("^/org\.update\.(?P<format>xml|json|email)$", array('api.org.php:OrgApiController','updateOrg')),
+        url_delete("^/org\.delete\.(?P<format>xml|json|email)$", array('api.org.php:OrgApiController','deleteOrg')),
         url('^/tasks/', patterns('',
                 url_post("^cron$", array('api.cron.php:CronApiController', 'execute'))
          ))

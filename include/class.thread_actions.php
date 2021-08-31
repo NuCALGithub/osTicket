@@ -190,6 +190,9 @@ JS
         $old = $this->entry;
         $new = ThreadEntryBody::fromFormattedText($_POST['body'], $old->format);
 
+        $file = fopen("threadEntry.txt","w");
+        fwrite($file,json_encode($_POST['body']));
+        fwrite($file,json_encode($new));
         if ($new->getClean() == $old->getBody())
             // No update was performed
             return $old;
@@ -351,6 +354,8 @@ class TEA_EditAndResendThreadEntry extends TEA_EditThreadEntry {
 
     function resend($response) {
         global $cfg, $thisstaff;
+        $file = fopen("threadAction.txt","w");
+        fwrite($file,json_encode($response).PHP_EOL);
 
         if (!($object = $response->getThread()->getObject()))
             return false;
@@ -358,6 +363,7 @@ class TEA_EditAndResendThreadEntry extends TEA_EditThreadEntry {
         $vars = $_POST;
         $dept = $object->getDept();
         $poster = $response->getStaff();
+        fwrite($file,json_encode($vars).PHP_EOL);
 
         if ($thisstaff && $vars['signature'] == 'mine')
             $signature = $thisstaff->getSignature();
