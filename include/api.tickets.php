@@ -105,9 +105,10 @@ class TicketApiController extends ApiController {
 
     function create($format) {
 
-        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets())
+        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets()){
             $error = array("code"=>401,"message"=>'API key not authorized');
             return $this->response(401, json_encode(array("error"=>$error)),$contentType="application/json");
+        }
 
         $ticket = null;
         if(!strcasecmp($format, 'email')) {
@@ -127,9 +128,10 @@ class TicketApiController extends ApiController {
 
     function get($format) {
 
-        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets())
+        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets()){
             $error = array("code"=>401,"message"=>'API key not authorized');
             return $this->response(401, json_encode(array("error"=>$error)),$contentType="application/json");
+        }
 
         $ticket = null;
         if(!strcasecmp($format, 'email')) {
@@ -146,9 +148,10 @@ class TicketApiController extends ApiController {
 
     function update($format) {
 
-        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets())
+        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets()){
             $error = array("code"=>401,"message"=>'API key not authorized');
             return $this->response(401, json_encode(array("error"=>$error)),$contentType="application/json");
+        }
 
         $ticket = null;
         if(!strcasecmp($format, 'email')) {
@@ -222,9 +225,10 @@ class TicketApiController extends ApiController {
     }
 
     function getStaff($format){
-        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets())
+        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets()){
             $error = array("code"=>401,"message"=>'API key not authorized');
             return $this->response(401, json_encode(array("error"=>$error)),$contentType="application/json");
+        }
 
         $staff = null;
         $staff = $this->_getStaff($this->getRequest($format));
@@ -237,9 +241,10 @@ class TicketApiController extends ApiController {
     }
 
     function getAllStaff($format){
-        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets())
+        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets()){
             $error = array("code"=>401,"message"=>'API key not authorized');
             return $this->response(401, json_encode(array("error"=>$error)),$contentType="application/json");
+        }
 
         $staffs = null;
         $staffs = Staff::objects();
@@ -257,9 +262,10 @@ class TicketApiController extends ApiController {
     
 
     function getStaffTickets($format){
-        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets())
+        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets()){
             $error = array("code"=>401,"message"=>'API key not authorized');
             return $this->response(401, json_encode(array("error"=>$error)),$contentType="application/json");
+        }
 
         $staff = null;
         if(!strcasecmp($format, 'email')) {
@@ -295,9 +301,10 @@ class TicketApiController extends ApiController {
     }
 
     function assignTicket($format){
-        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets())
+        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets()){
             $error = array("code"=>401,"message"=>'API key not authorized');
             return $this->response(401, json_encode(array("error"=>$error)),$contentType="application/json");
+        }
 
         $staff = null;
         if(!strcasecmp($format, 'email')) {
@@ -339,9 +346,10 @@ class TicketApiController extends ApiController {
 
     function replyTicket($format) {
 
-        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets())
+        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets()){
             $error = array("code"=>401,"message"=>'API key not authorized');
             return $this->response(401, json_encode(array("error"=>$error)),$contentType="application/json");
+        }
 
         $ticket = null;
         $result = array();
@@ -377,9 +385,10 @@ class TicketApiController extends ApiController {
 
     function postNoteTicket($format) {
 
-        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets())
+        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets()){
             $error = array("code"=>401,"message"=>'API key not authorized');
             return $this->response(401, json_encode(array("error"=>$error)),$contentType="application/json");
+        }
 
         $ticket = null;
         $result = array();
@@ -419,9 +428,10 @@ class TicketApiController extends ApiController {
 
     function transferTicket($format) {
 
-        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets())
+        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets()){
             $error = array("code"=>401,"message"=>'API key not authorized');
             return $this->response(401, json_encode(array("error"=>$error)),$contentType="application/json");
+        }
 
         $ticket = null;
         if(!strcasecmp($format, 'email')) {
@@ -456,9 +466,10 @@ class TicketApiController extends ApiController {
 
     function ticketSearch($format) {
 
-        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets())
+        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets()){
             $error = array("code"=>401,"message"=>'API key not authorized');
             return $this->response(401, json_encode(array("error"=>$error)),$contentType="application/json");
+        }
 
         $ticket = null;
         if(!strcasecmp($format, 'email')) {
@@ -478,9 +489,10 @@ class TicketApiController extends ApiController {
 
     function ticketHaveOrg($format) {
 
-        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets())
+        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets()){
             $error = array("code"=>401,"message"=>'API key not authorized');
             return $this->response(401, json_encode(array("error"=>$error)),$contentType="application/json");
+        }
 
         $ticket = null;
         if(!strcasecmp($format, 'email')) {
@@ -502,9 +514,10 @@ class TicketApiController extends ApiController {
 
     function orgTickets($format) {
 
-        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets())
+        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets()){
             $error = array("code"=>401,"message"=>'API key not authorized');
             return $this->response(401, json_encode(array("error"=>$error)),$contentType="application/json");
+        }
 
         $ticket = null;
         //$result = array();
@@ -540,9 +553,10 @@ class TicketApiController extends ApiController {
 
     function deptTickets($format) {
 
-        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets())
+        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets()){
             $error = array("code"=>401,"message"=>'API key not authorized');
             return $this->response(401, json_encode(array("error"=>$error)),$contentType="application/json");
+        }
 
         $ticket = null;
         if(!strcasecmp($format, 'email')) {
@@ -564,9 +578,10 @@ class TicketApiController extends ApiController {
 
     function getSLA($format) {
 
-        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets())
+        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets()){
             $error = array("code"=>401,"message"=>'API key not authorized');
             return $this->response(401, json_encode(array("error"=>$error)),$contentType="application/json");
+        }
 
         $sla = null;
         if(!strcasecmp($format, 'email')) {
@@ -591,9 +606,10 @@ class TicketApiController extends ApiController {
 
     function getTopic($format) {
 
-        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets())
+        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets()){
             $error = array("code"=>401,"message"=>'API key not authorized');
             return $this->response(401, json_encode(array("error"=>$error)),$contentType="application/json");
+        }
 
         $topic = null;
         if(!strcasecmp($format, 'email')) {
@@ -618,9 +634,10 @@ class TicketApiController extends ApiController {
 
     function threadAction($format) {
 
-        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets())
+        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets()){
             $error = array("code"=>401,"message"=>'API key not authorized');
             return $this->response(401, json_encode(array("error"=>$error)),$contentType="application/json");
+        }
 
         $threadEntry = null;
         if(!strcasecmp($format, 'email')) {
@@ -645,9 +662,10 @@ class TicketApiController extends ApiController {
 
     function setTicketState($data,$ticket) {
 
-        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets())
+        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets()){
             $error = array("code"=>401,"message"=>'API key not authorized');
             return $this->response(401, json_encode(array("error"=>$error)),$contentType="application/json");
+        }
 
         $isChanged = $ticket->setState($data['state']);
         if($isChanged == false){
