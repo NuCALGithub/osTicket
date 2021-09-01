@@ -156,7 +156,7 @@ class UserApiController extends ApiController {
         if(!$user)
             return $this->exerr(500, __("Unable to create user: unknown error"));
         
-        $result = array('created'=>true,'user_id'=>$user->gerId());
+        $result = array('created'=>true,'user_id'=>$user->getId());
         $this->response(200, json_encode($result),$contentType="application/json");
     }
     
