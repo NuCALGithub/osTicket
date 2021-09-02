@@ -10,49 +10,10 @@ class UserApiController extends ApiController {
     # so that all supported input formats should be supported
     function getRequestStructure($format, $data=null) {
         $supported = array(
-            "alert", "autorespond", "source", "topicId",
-            "attachments" => array("*" =>
-                array("name", "type", "data", "encoding", "size")
-            ),
-            "message", "ip", "priorityId","ticket_id",
-            "system_emails" => array(
-                "*" => "*"
-            ),
-            "thread_entry_recipients" => array (
-                "*" => array("to", "cc")
-            )
+            "page", "limit", "user_id", "email",
+            "name","phone","phone-ext","org_id","passwd1",
+            "passwd2","sendemail"
         );
-        # Fetch dynamic form field names for the given help topic and add
-        # the names to the supported request structure
-        if (isset($data['topicId'])
-                && ($topic = Topic::lookup($data['topicId']))
-                && ($forms = $topic->getForms())) {
-            foreach ($forms as $form)
-                foreach ($form->getDynamicFields() as $field)
-                    $supported[] = $field->get('name');
-        }
-
-        # Ticket form fields
-        # TODO: Support userId for existing user
-        if(($form = TicketForm::getInstance()))
-            foreach ($form->getFields() as $field)
-                $supported[] = $field->get('name');
-
-        # User form fields
-        if(($form = UserForm::getInstance()))
-            foreach ($form->getFields() as $field)
-                $supported[] = $field->get('name');
-
-        if(!strcasecmp($format, 'email')) {
-            $supported = array_merge($supported, array('header', 'mid',
-                'emailId', 'to-email-id', 'ticketId', 'reply-to', 'reply-to-name',
-                'in-reply-to', 'references', 'thread-type', 'system_emails',
-                'mailflags' => array('bounce', 'auto-reply', 'spam', 'viral'),
-                'recipients' => array('*' => array('name', 'email', 'source'))
-                ));
-
-            $supported['attachments']['*'][] = 'cid';
-        }
 
         return $supported;
     }
@@ -102,34 +63,12 @@ class UserApiController extends ApiController {
         return true;
     }
 
-    function getSLA($format) {
-
-        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets())
-            return $this->exerr(401, __('API key not authorized'));
-
-        $sla = null;
-        if(!strcasecmp($format, 'email')) {
-            # Handle remote piped emails - could be a reply...etc.
-            $sla = $this->processEmail();
-        } else {
-            $data = $this->getRequest($format);
-            if(isset($data['sla_id']))
-                $sla = SLA::lookup($data['sla_id']);
-            else{
-                $sla = $this->_getSLA($data);
-            }
-        }
-
-        if(!$sla)
-            return $this->exerr(500, __("Unable to find SLA plans: unknown error"));
-
-        $this->response(200, json_encode($sla));
-    }
-
     function createUser($format) {
 
-        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets())
-            return $this->exerr(401, __('API key not authorized'));
+        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets()){
+            $error = array("code"=>401,"message"=>'API key not authorized');
+            return $this->response(401, json_encode(array("error"=>$error)),$contentType="application/json");
+        }
 
         $user = null;
         if(!strcasecmp($format, 'email')) {
@@ -143,18 +82,20 @@ class UserApiController extends ApiController {
                 return $this->exerr(400, __("Unable to create user: bad request body")); 
             $user->register($data,$errors);
             if (count($errors)) {
-                if(isset($errors['errno']) && $errors['errno'] == 403)
-                    return $this->exerr(403, __('Role denied'));
-                else
-                    return $this->exerr(
-                            400,
-                            __("Unable to create new role: validation errors").":\n"
-                            .Format::array_implode(": ", "\n", $errors)
-                            );
+                if(isset($errors['errno']) && $errors['errno'] == 403){
+                    $error = array("code"=>403,"message"=>'User denied');
+                    return $this->response(403, json_encode(array("error"=>$error)),$contentType="application/json");
+                }else{
+                    $error = array("code"=>400,"message"=>"Unable to create new user: validation errors".":\n"
+                    .Format::array_implode(": ", "\n", $errors));
+                    return $this->response(400, json_encode(array("error"=>$error)),$contentType="application/json");
+                }
             }
         }
-        if(!$user)
-            return $this->exerr(500, __("Unable to create user: unknown error"));
+        if(!$user){
+            $error = array("code"=>500,"message"=>'Unable to create user: unknown error');
+            return $this->response(500, json_encode(array("error"=>$error)),$contentType="application/json");
+        }
         
         $result = array('created'=>true,'user_id'=>$user->getId());
         $this->response(200, json_encode($result),$contentType="application/json");
@@ -162,8 +103,10 @@ class UserApiController extends ApiController {
     
     function getUser($format) {
 
-        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets())
-            return $this->exerr(401, __('API key not authorized'));
+        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets()){
+            $error = array("code"=>401,"message"=>'API key not authorized');
+            return $this->response(401, json_encode(array("error"=>$error)),$contentType="application/json");
+        }
 
         $user = null;
         if(!strcasecmp($format, 'email')) {
@@ -177,16 +120,20 @@ class UserApiController extends ApiController {
                 $user = $this->_getUser($data);
             }
         }
-        if(!$user)
-            return $this->exerr(500, __("Unable to get users: unknown error"));
+        if(!$user){
+            $error = array("code"=>500,"message"=>'Unable to create user: unknown error');
+            return $this->response(500, json_encode(array("error"=>$error)),$contentType="application/json");
+        }
 
         $this->response(200, json_encode($user),$contentType="application/json");
     }
 
     function updateUser($format) {  
 
-        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets())
-            return $this->exerr(401, __('API key not authorized'));
+        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets()){
+            $error = array("code"=>401,"message"=>'API key not authorized');
+            return $this->response(401, json_encode(array("error"=>$error)),$contentType="application/json");
+        }
 
         $user = null;
         if(!strcasecmp($format, 'email')) {
@@ -194,17 +141,33 @@ class UserApiController extends ApiController {
             $user = $this->processEmail();
         } else {
             $data = $this->getRequest($format);
+
             if(isset($data['user_id']))
                 $user = User::lookup($data['user_id']);
             else if(isset($data['email']))
                 $user = User::lookup(array('email'=>$data['email']));
-            else
-                return $this->exerr(400, __("Unable to update user: bad request body"));
+            else{
+                $error = array("code"=>400,"message"=>'Unable to update user: bad request body');
+                return $this->response(400, json_encode(array("error"=>$error)),$contentType="application/json");
+            }
+
             $errors = array();
             $isUpdated = $user->updateInfo($data,$errors);
+            if (count($errors)) {
+                if(isset($errors['errno']) && $errors['errno'] == 403){
+                    $error = array("code"=>403,"message"=>'Update denied');
+                    return $this->response(403, json_encode(array("error"=>$error)),$contentType="application/json");
+                }else{
+                    $error = array("code"=>400,"message"=>"Unable to update user: validation errors".":\n"
+                    .Format::array_implode(": ", "\n", $errors));
+                    return $this->response(400, json_encode(array("error"=>$error)),$contentType="application/json");
+                }
+            }
         }
-        if(!$isUpdated)
-            return $this->exerr(500, __("Unable to update user: unknown error"));
+        if(!$isUpdated){
+            $error = array("code"=>500,"message"=>'Unable to update user: unknown error');
+            return $this->response(500, json_encode(array("error"=>$error)),$contentType="application/json");
+        }
 
         $result = array("updated"=>true,"user_id"=>$user->getId());
         $this->response(200, json_encode($result),$contentType="application/json");
@@ -212,8 +175,10 @@ class UserApiController extends ApiController {
 
     function lockUser($format) {
 
-        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets())
-            return $this->exerr(401, __('API key not authorized'));
+        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets()){
+            $error = array("code"=>401,"message"=>'API key not authorized');
+            return $this->response(401, json_encode(array("error"=>$error)),$contentType="application/json");
+        }
 
         $user = null;
         if(!strcasecmp($format, 'email')) {
@@ -222,29 +187,40 @@ class UserApiController extends ApiController {
         } else {
             $data = $this->getRequest($format);
             if(isset($data['user_id'])){
-                $user = UserAccount::lookup($data['user_id']);
+                $user = UserAccount::lookup(array('user_id'=>$data['user_id']));
             } else if(isset($data['email'])){
                 $user = UserAccount::lookup(array('email'=>$data['email']));
             } else{
-                return $this->exerr(400, __("Unable to lock user: bad request body"));
+                $error = array("code"=>400,"message"=>'Unable to lock user: bad request body');
+                return $this->response(400, json_encode(array("error"=>$error)),$contentType="application/json");
+            }
+
+            if(!$user){
+                $error = array("code"=>400,"message"=>'Unable to lock user: cant find user with given id');
+                return $this->response(400, json_encode(array("error"=>$error)),$contentType="application/json");
             }
             
             if($user->isLocked()){
-                return $this->exerr(400, __("Unable to lock user: already locked"));
+                $error = array("code"=>400,"message"=>'Unable to lock user: already locked');
+                return $this->response(400, json_encode(array("error"=>$error)),$contentType="application/json");
             }
             $isLocked = $user->lock();
         }
-        if(!$isLocked)
-            return $this->exerr(500, __("Unable to lock user: unknown error"));
+        if(!$isLocked){
+            $error = array("code"=>500,"message"=>'Unable to lock user: unknown error');
+            return $this->response(500, json_encode(array("error"=>$error)),$contentType="application/json");
+        }
 
-        $result = array('locked'=>true,'user_id'=>$user->getId());
+        $result = array('locked'=>true,'user_id'=>$user->getUserId());
         $this->response(200, json_encode($result),$contentType="application/json");
     }
 
     function unlockUser($format) {
 
-        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets())
-            return $this->exerr(401, __('API key not authorized'));
+        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets()){
+            $error = array("code"=>401,"message"=>'API key not authorized');
+            return $this->response(401, json_encode(array("error"=>$error)),$contentType="application/json");
+        }
 
         $user = null;
         if(!strcasecmp($format, 'email')) {
@@ -253,21 +229,31 @@ class UserApiController extends ApiController {
         } else {
             $data = $this->getRequest($format);
             if(isset($data['user_id']))
-                $user = UserAccount::lookup($data['user_id']);
+                $user = UserAccount::lookup(array('user_id'=>$data['user_id']));
             else if(isset($data['email']))
                 $user = UserAccount::lookup(array('email'=>$data['email']));
-            else
-                return $this->exerr(400, __("Unable to unlock user: bad request body"));
+            else{
+                $error = array("code"=>400,"message"=>'Unable to unlock user: bad request body');
+                return $this->response(400, json_encode(array("error"=>$error)),$contentType="application/json");
+            }
+
+            if(!$user){
+                $error = array("code"=>400,"message"=>'Unable to unlock user: cant find user with given id');
+                return $this->response(400, json_encode(array("error"=>$error)),$contentType="application/json");
+            }
             
             if(!$user->isLocked()){
-                return $this->exerr(400, __("Unable to unlock user: already unlocked"));
+                $error = array("code"=>400,"message"=>'Unable to unlock user: already unlocked');
+                return $this->response(400, json_encode(array("error"=>$error)),$contentType="application/json");
             }
             $isLocked = $user->unlock();
         }
-        if(!$isLocked)
-            return $this->exerr(500, __("Unable to unlock user: unknown error"));
+        if(!$isLocked){
+            $error = array("code"=>500,"message"=>'Unable to unlock user: unknown error');
+            return $this->response(500, json_encode(array("error"=>$error)),$contentType="application/json");
+        }
             
-        $result = array('locked'=>false,'user_id'=>$user->getId());
+        $result = array('locked'=>false,'user_id'=>$user->getUserId());
         $this->response(200, json_encode($result),$contentType="application/json");
     }
     
@@ -291,8 +277,10 @@ class UserApiController extends ApiController {
             // Check if limit exceeds max limit
             if((int)$data['limit'] < 100)
                 $limit = $data['limit'];
-            else
-                return $this->exerr(400, __("Limit can not exceed 100: bad request body")); 
+            else{
+                $error = array("code"=>400,"message"=>'Limit can not exceed 100: bad request body');
+                return $this->response(400, json_encode(array("error"=>$error)),$contentType="application/json");
+            }
         }
 
         // Create pagination for query

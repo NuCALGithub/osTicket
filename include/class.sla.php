@@ -16,7 +16,7 @@ include_once INCLUDE_DIR.'class.businesshours.php';
 include_once INCLUDE_DIR.'class.schedule.php';
 
 class SLA extends VerySimpleModel
-implements TemplateVariable {
+implements TemplateVariable, JsonSerializable {
 
     static $meta = array(
         'table' => SLA_TABLE,
@@ -238,6 +238,18 @@ implements TemplateVariable {
         Signal::send('object.deleted', $this, $type);
 
         return $num;
+    }
+
+    public function jsonSerialize() {
+        return [
+            'sla_id' => $this->getId(),
+            'sla_name' => $this->getName(),
+            'schedule_id' => $this->getScheduleId(),
+            'schedule_name' => $this->getSchedule() ? $this->getSchedule()->getName() : "",
+            'flags' => $this->flags,
+            'grace_period' => $this->getGracePeriod(),
+            'notes' => $this->notes
+        ];
     }
 
     /** static functions **/

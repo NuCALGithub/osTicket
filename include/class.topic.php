@@ -18,7 +18,7 @@ require_once INCLUDE_DIR . 'class.filter.php';
 require_once INCLUDE_DIR . 'class.search.php';
 
 class Topic extends VerySimpleModel
-implements TemplateVariable, Searchable {
+implements TemplateVariable, Searchable, JsonSerializable {
 
     static $meta = array(
         'table' => TOPIC_TABLE,
@@ -287,6 +287,36 @@ implements TemplateVariable, Searchable {
     function __toString() {
         return $this->getFullName();
     }
+
+    public function jsonSerialize() {
+        return [
+            'topic_id' => $this->getId(),
+            'topic_name' => $this->__toString(),
+            'topic_pid' => $this->getPid(),
+            'topic_pname' => $this->getParent() ? $this->getParent()->__toString() : "",
+            'isPublic' => $this->isPublic(),
+            'flags' => $this->flags,
+            'status_id' => $this->getStatusId(),
+            'status' => $this->getStatus(),
+            'priority_id' => $this->getPriorityId(),
+            'priority' => Priority::lookup($this->getPriorityId())->__toString(),
+            'dept_id' => $this->getDeptId(),
+            'dept_name' => $this->getDept() ? $this->getDept()->getName() : "",
+            'staff_id' => $this->getStaffId(),
+            'staff_name' => $this->getStaffId() ? Staff::lookup($this->getStaffId())->getUsername() : "",
+            'team_id' => $this->getTeamId() ? Team::lookup($this->getTeamId())->getName() : "",
+            'team_name' => $this->getDeptId(),
+            'sla_id' => $this->getSLAId(),
+            'sla_name' => $this->getSLAId() ? SLA::lookup($this->getSLAId())->getName() : "",
+            'page_id' => $this->getPageId(),
+            'page' => $this->getPage(),
+            'sequence_id' => $this->sequence_id,
+            'sequence_name' => $this->sequence_id ? Sequence::lookup($this->sequence_id)->getName() : "",
+            //'number_format' => $this->getDeptId(),
+            'notes' => $this->notes
+        ];
+    }
+
 
     /*** Static functions ***/
 

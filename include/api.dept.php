@@ -10,50 +10,14 @@ class DeptApiController extends ApiController {
     # so that all supported input formats should be supported
     function getRequestStructure($format, $data=null) {
         $supported = array(
-            "alert", "autorespond", "source", "topicId",
-            "attachments" => array("*" =>
-                array("name", "type", "data", "encoding", "size")
-            ),
-            "message", "ip", "priorityId","ticket_id",
-            "system_emails" => array(
-                "*" => "*"
-            ),
-            "thread_entry_recipients" => array (
-                "*" => array("to", "cc")
-            )
+            "page", "limit", "dept_id", "pid",
+            "name", "status", "ispublic","sla_id","schedule_id",
+            "manager_id","assignment_flag","email_id","tpl_id",
+            "autoresp_email_id","group_membership","signature",
+            "members" => array("*"),
+            "member_role" => array("*"),
+            "member_alerts" => array("*")
         );
-        # Fetch dynamic form field names for the given help topic and add
-        # the names to the supported request structure
-        if (isset($data['topicId'])
-                && ($topic = Topic::lookup($data['topicId']))
-                && ($forms = $topic->getForms())) {
-            foreach ($forms as $form)
-                foreach ($form->getDynamicFields() as $field)
-                    $supported[] = $field->get('name');
-        }
-
-        # Ticket form fields
-        # TODO: Support userId for existing user
-        if(($form = TicketForm::getInstance()))
-            foreach ($form->getFields() as $field)
-                $supported[] = $field->get('name');
-
-        # User form fields
-        if(($form = UserForm::getInstance()))
-            foreach ($form->getFields() as $field)
-                $supported[] = $field->get('name');
-
-        if(!strcasecmp($format, 'email')) {
-            $supported = array_merge($supported, array('header', 'mid',
-                'emailId', 'to-email-id', 'ticketId', 'reply-to', 'reply-to-name',
-                'in-reply-to', 'references', 'thread-type', 'system_emails',
-                'mailflags' => array('bounce', 'auto-reply', 'spam', 'viral'),
-                'recipients' => array('*' => array('name', 'email', 'source'))
-                ));
-
-            $supported['attachments']['*'][] = 'cid';
-        }
-
         return $supported;
     }
 
@@ -104,8 +68,10 @@ class DeptApiController extends ApiController {
 
     function createDept($format) {
 
-        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets())
-            return $this->exerr(401, __('API key not authorized'));
+        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets()){
+            $error = array("code"=>401,"message"=>'API key not authorized');
+            return $this->response(401, json_encode(array("error"=>$error)),$contentType="application/json");
+        }
 
         $dept = null;
         if(!strcasecmp($format, 'email')) {
@@ -119,16 +85,20 @@ class DeptApiController extends ApiController {
             $isCreated = $this->_updateDept($dept,$data,$errors); 
         }
 
-        if(!$dept)
-            return $this->exerr(500, __("Unable to create new department: unknown error"));
+        if(!$dept){
+            $error = array("code"=>500,"message"=>'Unable to create new department: unknown error');
+            return $this->response(500, json_encode(array("error"=>$error)),$contentType="application/json");
+        }
 
         $result = array("created"=>$isCreated,"details"=>$dept);
-        $this->response(201, json_encode($result));
+        $this->response(201, json_encode($result),$contentType="application/json");
     }
 
     function updateDept($format) {
-        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets())
-            return $this->exerr(401, __('API key not authorized'));
+        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets()){
+            $error = array("code"=>401,"message"=>'API key not authorized');
+            return $this->response(401, json_encode(array("error"=>$error)),$contentType="application/json");
+        }
 
         $dept = null;
         if(!strcasecmp($format, 'email')) {
@@ -141,23 +111,29 @@ class DeptApiController extends ApiController {
             if(isset($data['dept_id'])){
                 $dept = Dept::lookup($data['dept_id']);
                 $data['id'] = $data['dept_id'];
-            }else
-                return $this->exerr(400, __("Unable to update department: no id provided"));
+            }else{
+                $error = array("code"=>400,"message"=>'Unable to update department: no id provided');
+                return $this->response(400, json_encode(array("error"=>$error)),$contentType="application/json");
+            }
             
             $isUpdated = $this->_updateDept($dept,$data,$errors);
         }
 
-        if(!$isUpdated)
-            return $this->exerr(500, __("Unable to update dept: unknown error"));
+        if(!$isUpdated){
+            $error = array("code"=>400,"message"=>'Unable to update dept: unknown error');
+            return $this->response(400, json_encode(array("error"=>$error)),$contentType="application/json");
+        }
 
-        $result = array("updated"=>$isUpdated);
-        $this->response(200, json_encode($result));
+        $result = array("updated"=>$isUpdated,"dept_id"=>$dept->getId());
+        $this->response(200, json_encode($result),$contentType="application/json");
     }
 
     function deleteDept($format) {
 
-        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets())
-            return $this->exerr(401, __('API key not authorized'));
+        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets()){
+            $error = array("code"=>401,"message"=>'API key not authorized');
+            return $this->response(401, json_encode(array("error"=>$error)),$contentType="application/json");
+        }
 
         $dept = null;
         if(!strcasecmp($format, 'email')) {
@@ -166,50 +142,44 @@ class DeptApiController extends ApiController {
         } else {
         # Parse request body
             $data = $this->getRequest($format);
-            $errors = array();
             if(isset($data['dept_id'])){
                 $dept = Dept::lookup($data['dept_id']);
                 if($dept)
                     $isDeleted = $dept->delete();
-                else
-                    return $this->exerr(400, __("Unable to delete department: no dept found with given dept_id"));
-            }else
-                return $this->exerr(500, __("Unable to delete department: no dept_id provided"));
+                else{
+                    $error = array("code"=>400,"message"=>'Unable to delete department: no dept found with given dept_id');
+                    return $this->response(400, json_encode(array("error"=>$error)),$contentType="application/json");
+                }
+            }else{
+                $error = array("code"=>400,"message"=>'Unable to delete department: no dept_id provided');
+                return $this->response(400, json_encode(array("error"=>$error)),$contentType="application/json");
+            }
         }
 
-        if(!$isDeleted)
-            return $this->exerr(500, __("Unable to delete dept: unknown error"));
+        if(!$isDeleted){
+            $error = array("code"=>500,"message"=>'Unable to delete dept: unknown error');
+            return $this->response(500, json_encode(array("error"=>$error)),$contentType="application/json");
+        }
 
-        $result = array("deleted"=>$isDeleted);
-        $this->response(200, json_encode($result));
+        $result = array("deleted"=>$isDeleted,"dept_id"=>$data['dept_id']);
+        $this->response(200, json_encode($result),$contentType="application/json");
     }
     
 
     /* private helper functions */
 
     function _updateDept($dept,$data,$errors){
-        /*if(isset($data['dept_id'])){
-            $dept = Dept::lookup($data['dept_id']);
-            $data['id'] = $data['dept_id'];
-        }else
-            return $this->exerr(400, __("Unable to update department: no id provided"));
-        */
-        //if($dept){
-            $isUpdated = $dept->update($data,$errors);
-            if (count($errors)) {
-                if(isset($errors['errno']) && $errors['errno'] == 403)
-                    return $this->exerr(403, __('Update denied'));
-                else
-                    return $this->exerr(
-                            400,
-                            __("Unable to update department: validation errors").":\n"
-                            .Format::array_implode(": ", "\n", $errors)
-                            );
+        $isUpdated = $dept->update($data,$errors);
+        if (count($errors)) {
+            if(isset($errors['errno']) && $errors['errno'] == 403){
+                $error = array("code"=>403,"message"=>'Department denied');
+                return $this->response(403, json_encode(array("error"=>$error)),$contentType="application/json");
+            }else{
+                $error = array("code"=>400,"message"=>"Unable to take action: validation errors".":\n"
+                .Format::array_implode(": ", "\n", $errors));
+                return $this->response(400, json_encode(array("error"=>$error)),$contentType="application/json");
             }
-        //}else{
-        //    return $this->exerr(400, __("Unable to update department: no dept found with given id"));
-        //}
-
+        }
         return true;
     }
 

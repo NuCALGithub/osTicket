@@ -1,9 +1,9 @@
 <?php
 
 include_once INCLUDE_DIR.'class.api.php';
-include_once INCLUDE_DIR.'class.organization.php';
+include_once INCLUDE_DIR.'class.ticket.php';
 
-class OrgApiController extends ApiController {
+class TopicApiController extends ApiController {
 
     # Supported arguments -- anything else is an error. These items will be
     # inspected _after_ the fixup() method of the ApiXxxDataParser classes
@@ -102,163 +102,44 @@ class OrgApiController extends ApiController {
         return true;
     }
 
-    function createOrg($format) {
+    
+
+    function getTopic($format) {
 
         if(!($key=$this->requireApiKey()) || !$key->canCreateTickets()){
             $error = array("code"=>401,"message"=>'API key not authorized');
             return $this->response(401, json_encode(array("error"=>$error)),$contentType="application/json");
         }
 
-        $org = null;
+        $topic = null;
         if(!strcasecmp($format, 'email')) {
             # Handle remote piped emails - could be a reply...etc.
-            $org = $this->processEmail();
+            $topic = $this->processEmail();
         } else {
-            # Parse request body
             $data = $this->getRequest($format);
-            $errors = array();
-            $org = Organization::fromVars($data);
-        }
-
-        if(!$org){
-            $error = array("code"=>500,"message"=>'Unable to create new organization: unknown error');
-            return $this->response(500, json_encode(array("error"=>$error)),$contentType="application/json");
-        }
-
-        $result = array("created"=>true,"org_id"=>$org->getId(),"details"=>$org);
-        $this->response(201, json_encode($result),$contentType="application/json");
-    }
-
-    function getOrg($format) {
-
-        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets()){
-            $error = array("code"=>401,"message"=>'API key not authorized');
-            return $this->response(401, json_encode(array("error"=>$error)),$contentType="application/json");
-        }
-
-        $org = null;
-        if(!strcasecmp($format, 'email')) {
-            # Handle remote piped emails - could be a reply...etc.
-            $org = $this->processEmail();
-        } else {
-            # Parse request body
-            $data = $this->getRequest($format);
-            $errors = array();
-            if(isset($data['org_id'])){
-                $org = Organization::lookup($data['org_id']);
-
-            }else{
-                $org = $this->_getOrg($data);
+            if(isset($data['topic_id']))
+                $topic = Topic::lookup($data['topic_id']);
+            else{
+                $topic = $this->_getTopic($data);
             }
         }
 
-        if(!$org){
-            $error = array("code"=>500,"message"=>'Unable to get organization: unknown error');
+        if(!$topic){
+            $error = array("code"=>500,"message"=>'Unable to find topic: unknown error');
             return $this->response(500, json_encode(array("error"=>$error)),$contentType="application/json");
         }
 
-        $this->response(200, json_encode($org),$contentType="application/json");
+        $this->response(200, json_encode($topic),$contentType="application/json");
     }
 
-    function updateOrg($format) {
-        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets()){
-            $error = array("code"=>401,"message"=>'API key not authorized');
-            return $this->response(401, json_encode(array("error"=>$error)),$contentType="application/json");
-        }
-
-        $org = null;
-        if(!strcasecmp($format, 'email')) {
-            # Handle remote piped emails - could be a reply...etc.
-            $org = $this->processEmail();
-        } else {
-        # Parse request body
-            $data = $this->getRequest($format);
-            $errors = array();
-            $isUpdated = $this->_updateOrg($data,$errors);
-        }
-
-        if(!$isUpdated){
-            $error = array("code"=>500,"message"=>'Unable to update organization: unknown error');
-            return $this->response(500, json_encode(array("error"=>$error)),$contentType="application/json");
-        }
-
-        $result = array("updated"=>$isUpdated,"org_id"=>$org->getId());
-        $this->response(200, json_encode($result),$contentType="application/json");
-    }
-
-    function deleteOrg($format) {
-
-        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets()){
-            $error = array("code"=>401,"message"=>'API key not authorized');
-            return $this->response(401, json_encode(array("error"=>$error)),$contentType="application/json");
-        }
-
-        $org = null;
-        if(!strcasecmp($format, 'email')) {
-            # Handle remote piped emails - could be a reply...etc.
-            $org = $this->processEmail();
-        } else {
-        # Parse request body
-            $data = $this->getRequest($format);
-            $errors = array();
-            if(isset($data['org_id'])){
-                $org = Organization::lookup($data['org_id']);
-                if($org)
-                    $isDeleted = $org->delete();
-                else{
-                    $error = array("code"=>400,"message"=>'Unable to delete organization: no org found with given org_id');
-                    return $this->response(400, json_encode(array("error"=>$error)),$contentType="application/json");
-                }
-            }else{
-                $error = array("code"=>500,"message"=>'Unable to delete organization: no org_id provided');
-                return $this->response(500, json_encode(array("error"=>$error)),$contentType="application/json");
-            }
-        }
-
-        if(!$isDeleted){
-            $error = array("code"=>500,"message"=>'Unable to delete organization: unknown error');
-            return $this->response(500, json_encode(array("error"=>$error)),$contentType="application/json");
-        }
-
-        $result = array("deleted"=>$isDeleted,"org_id"=>$data['org_id']);
-        $this->response(200, json_encode($result),$contentType="application/json");
-    }
     
 
     /* private helper functions */
 
-    function _updateOrg($data,$errors){
-        if(isset($data['org_id'])){
-            $org = Organization::lookup($data['org_id']);
-        }else{
-            $error = array("code"=>400,"message"=>'Unable to update organization: no id provided');
-            return $this->response(400, json_encode(array("error"=>$error)),$contentType="application/json");
-        }
-        
-        if($org){
-            $isUpdated = $org->update($data,$errors);
-            if (count($errors)) {
-                if(isset($errors['errno']) && $errors['errno'] == 403){
-                    $error = array("code"=>403,"message"=>'Organization denied');
-                    return $this->response(403, json_encode(array("error"=>$error)),$contentType="application/json");
-                }else{
-                    $error = array("code"=>400,"message"=>"Unable to update organization: validation errors".":\n"
-                    .Format::array_implode(": ", "\n", $errors));
-                    return $this->response(400, json_encode(array("error"=>$error)),$contentType="application/json");
-                }
-            }
-        }else{
-            $error = array("code"=>400,"message"=>'Unable to update organization: no org found with given id');
-            return $this->response(400, json_encode(array("error"=>$error)),$contentType="application/json");
-        }
-
-        return true;
-    }
-
-    function _getOrg($data){
+    function _getTopic($data){
         // Init =================================================
         // Declaring variables that we use.
-        $orgs = array();        // Orgs array
+        $topics = array();        // topics array
         $pageNumber = 1;        // Result page number
         $limit = 25;            // Page ticket count limit
         $criteria = null;       // Search criteria
@@ -267,7 +148,7 @@ class OrgApiController extends ApiController {
         // Set page number if given (Default: 1)
         if(isset($data['page']))
             $pageNumber = $data['page'];
-        // Set orgs per page limit if given (Default: 25)
+        // Set topics per page limit if given (Default: 25)
         if(isset($data['limit'])){
             // Check if limit exceeds max limit
             if((int)$data['limit'] < 100)
@@ -279,19 +160,20 @@ class OrgApiController extends ApiController {
         }
 
         // Create pagination for query
-        $pagination = new Pagenate(Organization::objects()->count(), $pageNumber, $limit);
-        $query = Organization::objects()->limit($pagination->getLimit())->offset($pagination->getStart());
-        //$page = $pagination->paginateSimple($query);
+        $pagination = new Pagenate(Topic::objects()->count(), $pageNumber, $limit);
+        $query = Topic::objects()->limit($pagination->getLimit())->offset($pagination->getStart());
+        $page = $pagination->paginateSimple($query);
         
-        // Get org information from the page and push it into orgs array
-        foreach($query as $org){
-            array_push($orgs,$org);
+        // Get topic information from the page and push it into topics array
+        foreach($page as $topic){
+            array_push($topics,$topic);
         }
 
         // Clearing up
-        $result = array('total'=>count($orgs),'result'=>$orgs);
+        $result = array('total'=>count($topics),'result'=>$topics);
         return $result;
     }
+
 
     function processEmail($data=false) {
 
@@ -327,10 +209,10 @@ class OrgApiController extends ApiController {
 }
 
 //Local email piping controller - no API key required!
-class PipeApiController extends OrgApiController {
+class PipeApiController extends TopicApiController {
 
     //Overwrite grandparent's (ApiController) response method.
-    function response($code, $resp, $contentType="text/plain") {
+    function response($code, $resp,$contentType="text/plain") {
 
         //Use postfix exit codes - instead of HTTP
         switch($code) {
