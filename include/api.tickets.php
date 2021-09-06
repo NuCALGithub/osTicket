@@ -524,6 +524,58 @@ class TicketApiController extends ApiController {
 
         $this->response(200, json_encode($threadEntry),$contentType="application/json");
     }
+
+    function threadDelete($format) {
+
+        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets()){
+            $error = array("code"=>401,"message"=>'API key not authorized');
+            return $this->response(401, json_encode(array("error"=>$error)),$contentType="application/json");
+        }
+
+        $threadEntry = null;
+        if(!strcasecmp($format, 'email')) {
+            # Handle remote piped emails - could be a reply...etc.
+            $threadEntry = $this->processEmail();
+        } else {
+            # Parse request body
+            $data = $this->getRequest($format);
+            $data['action'] = 'delete';
+            $threadEntry = $this->triggerThreadAction($data);
+        }
+
+        if(!$threadEntry){
+            $error = array("code"=>500,"message"=>'Unable to find thread: unknown error');
+            return $this->response(500, json_encode(array("error"=>$error)),$contentType="application/json");
+        }
+
+        $this->response(200, json_encode($threadEntry),$contentType="application/json");
+    }
+
+    function threadGet($format) {
+
+        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets()){
+            $error = array("code"=>401,"message"=>'API key not authorized');
+            return $this->response(401, json_encode(array("error"=>$error)),$contentType="application/json");
+        }
+
+        $threadEntry = null;
+        if(!strcasecmp($format, 'email')) {
+            # Handle remote piped emails - could be a reply...etc.
+            $threadEntry = $this->processEmail();
+        } else {
+            # Parse request body
+            $data = $this->getRequest($format);
+            $data['action'] = 'getThread';
+            $threadEntry = $this->triggerThreadAction($data);
+        }
+
+        if(!$threadEntry){
+            $error = array("code"=>500,"message"=>'Unable to find thread: unknown error');
+            return $this->response(500, json_encode(array("error"=>$error)),$contentType="application/json");
+        }
+
+        $this->response(200, json_encode($threadEntry),$contentType="application/json");
+    }
     
 
     /* private helper functions */
@@ -689,13 +741,14 @@ class TicketApiController extends ApiController {
     function triggerThreadAction($data) {
         // Setting variables
         $threadEntry = null;
-        $staff = $this->_getStaff($data);
+        if($_SERVER['REQUEST_METHOD'] != 'GET')
+            $staff = $this->_getStaff($data);
         $body = null;
         $title = null;
         $action = null;
 
         // Assigning variables if given
-        if(isset($data['thread_id']) && isset($data['body']) && isset($data['action'])){
+        if(isset($data['thread_id']) && isset($data['action'])){
             $threadEntry = ThreadEntry::lookup($data['thread_id']);
             // Check if thread entry exists
             if(!$threadEntry){
@@ -708,13 +761,17 @@ class TicketApiController extends ApiController {
             if(isset($data['title']))
                 $title = $data['title'];
         }else{
-            $error = array("code"=>400,"message"=>'No thread_id/body/action given: bad request body');
+            $error = array("code"=>400,"message"=>'No thread_id/action given: bad request body');
             return $this->response(400, json_encode(array("error"=>$error)),$contentType="application/json");
         }
 
         // Take proper action
         switch($action){
             case 'edit':
+                if($body == null){
+                    $error = array("code"=>400,"message"=>'No thread entry body given: bad request body');
+                    return $this->response(400, json_encode(array("error"=>$error)),$contentType="application/json");
+                }
                 $threadEntry = $this->updateEntry($threadEntry->getId(),$body,$title,$staff);
                 $this->response(200, 
                                 json_encode(array("action"=>"edit",
@@ -724,6 +781,10 @@ class TicketApiController extends ApiController {
                                 ,$contentType="application/json");
                 break;
             case 'edit_resend':
+                if($body == null){
+                    $error = array("code"=>400,"message"=>'No thread entry body given: bad request body');
+                    return $this->response(400, json_encode(array("error"=>$error)),$contentType="application/json");
+                }
                 $threadEntry = $this->updateEntry($threadEntry->getId(),$body,$title,$staff);
                 $this->resend($threadEntry,$data,$staff);
                 $this->response(200, 
@@ -743,15 +804,25 @@ class TicketApiController extends ApiController {
                                 ,$contentType="application/json");
                 break;
             case 'delete':
-                $threadEntry->delete();
-                $this->response(200, 
-                                json_encode(array("action"=>"delete",
-                                                  "status"=>"deleted",
-                                                  "thread_id"=>$threadEntry->getId()))
-                                ,$contentType="application/json");
+                if($_SERVER['REQUEST_METHOD'] == 'DELETE'){
+                    $threadEntry->delete();
+                    $this->response(200, 
+                        json_encode(array("action"=>"delete",
+                                          "status"=>"deleted",
+                                          "thread_id"=>$threadEntry->getId()))
+                                          ,$contentType="application/json");
+                } else{
+                    $error = array("code"=>400,"message"=>'HTTP method not supported for: '.$action);
+                    return $this->response(400, json_encode(array("error"=>$error)),$contentType="application/json");
+                }
                 break;
             case 'getThread':
-                $this->response(200, json_encode($threadEntry),$contentType="application/json");
+                if($_SERVER['REQUEST_METHOD'] == 'GET'){
+                    $this->response(200, json_encode($threadEntry),$contentType="application/json");
+                } else {
+                    $error = array("code"=>400,"message"=>'HTTP method not supported for: '.$action);
+                    return $this->response(400, json_encode(array("error"=>$error)),$contentType="application/json");
+                }
                 break;
             default:
                 $error = array("code"=>400,"message"=>'No action found: bad request body');
