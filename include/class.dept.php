@@ -630,7 +630,7 @@ implements TemplateVariable, JsonSerializable {
             'autoresp_email' => $this->getAutoRespEmail()->getEmail(),
             'ticket_auto_response' => $this->autoRespONNewTicket(),
             'message_auto_response' => $this->autoRespONNewMessage(),
-            'isPublic' => $this->isPublic(),
+            'isPublic' => (bool) $this->isPublic(),
             'group_membership' => $this->isGroupMembershipEnabled(),
             'flags' => $this->getVar('flags'),
             'signature' => $this->getSignature()

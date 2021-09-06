@@ -974,8 +974,8 @@ implements AuthenticatedUser, EmailContact, TemplateVariable, Searchable, JsonSe
             'phone' => $this->getVar('phone'),
             'locale' => $this->getLocale(),
             'user_name' => $this->getName()->getFull(),
-            'active' => $this->isActive(),
-            'admin' => $this->isAdmin(),
+            'active' => (bool) $this->isActive(),
+            'admin' => (bool) $this->isAdmin(),
             'permissions' => $this->getPermission()->perms,
             'extra' => $this->getExtraAttr()
         ];

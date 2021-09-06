@@ -294,7 +294,7 @@ implements TemplateVariable, Searchable, JsonSerializable {
             'topic_name' => $this->__toString(),
             'topic_pid' => $this->getPid(),
             'topic_pname' => $this->getParent() ? $this->getParent()->__toString() : "",
-            'isPublic' => $this->isPublic(),
+            'isPublic' => (bool) $this->isPublic(),
             'flags' => $this->flags,
             'status_id' => $this->getStatusId(),
             'status' => $this->getStatus(),
