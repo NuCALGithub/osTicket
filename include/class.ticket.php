@@ -3898,13 +3898,12 @@ implements RestrictedAccess, Threadable, Searchable, JsonSerializable {
 
 
     public function jsonSerialize() {
-        $types = array('M', 'R', 'N');
-        $threadTypes=array('M'=>'message','R'=>'response', 'N'=>'note');
-        $thread = $this->getThreadEntries($types);
-        $a = array();
-        foreach ($thread as $tentry) {
-            array_push($a , $tentry);
-        }
+        $assignees = array();
+        if ($staff = $this->getStaff())
+            $assignees[] = $staff->getFirstName()." ".$staff->getLastName();
+
+        if ($team = $this->getTeam())
+            $assignees[] = $team->getName();
 
         return [
             'ticket_id' => $this->getId(),
@@ -3925,8 +3924,8 @@ implements RestrictedAccess, Threadable, Searchable, JsonSerializable {
             'help_topic' => $this->getHelpTopic(),
             'last_message_timestamp' => $this->getLastMsgDate(),
             'last_response_timestamp' => $this->getLastRespDate(),
-            'assigned_to' => $this->getAssignees(),
-            'thread_entries' =>$a
+            'assigned_to' => $assignees,
+            'thread_entry_count'=>$this->getThreadCount()
         ];
     }
    /*============== Static functions. Use Ticket::function(params); =============nolint*/

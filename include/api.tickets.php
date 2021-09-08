@@ -400,7 +400,9 @@ class TicketApiController extends ApiController {
             # Handle remote piped emails - could be a reply...etc.
             $ticket = $this->processEmail();
         } else {
-            $ticket = $this->_searchTicket($this->getRequest($format));
+            $data = $this->getRequest($format);
+            //$query = Ticket::lookup($data['criteria']);
+            $ticket = $this->_searchTicket($data);
         }
 
         if(!$ticket){
@@ -926,6 +928,16 @@ class TicketApiController extends ApiController {
         $query = array();
         if($hasId){
             $ticket = Ticket::lookup($data['ticket_id']);
+            $types = array('M', 'R', 'N');
+            $threadTypes=array('M'=>'message','R'=>'response', 'N'=>'note');
+            $thread = $ticket->getThreadEntries($types);
+            $a = array();
+            foreach ($thread as $tentry) {
+                array_push($a , $tentry);
+            }
+            //$ticket = array("ticket"=>$ticket,"thread_entries"=>$a);
+            $ticket = json_decode(json_encode($ticket),true);
+            $ticket['thread_entries'] = $a;
             if(!$ticket){
                 $error = array("code"=>400,"message"=>'Unable to find ticket: bad ticket id');
                 return $this->response(400, json_encode(array("error"=>$error)),$contentType="application/json");
