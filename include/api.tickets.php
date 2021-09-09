@@ -139,7 +139,7 @@ class TicketApiController extends ApiController {
             $ticket = $this->processEmail();
         } else {
             # Parse request body
-            $ticket = $this->getTicket($this->getRequest($format));
+            $ticket = $this->_getTicket($this->getRequest($format));
         }
         if(!$ticket)
             return $this->exerr(500, __("Unable to get ticket details: unknown error"));
@@ -923,6 +923,24 @@ class TicketApiController extends ApiController {
     }
 
     function getTicket($data) {
+        $hasId = isset($data['ticket_id']);
+        $ticket = null;
+        $query = array();
+        if($hasId){
+            $ticket = Ticket::lookup($data['ticket_id']);
+            if(!$ticket){
+                $error = array("code"=>400,"message"=>'Unable to find ticket: bad ticket id');
+                return $this->response(400, json_encode(array("error"=>$error)),$contentType="application/json");
+            }
+        }else{
+            $error = array("code"=>400,"message"=>'No id provided: bad request body');
+            return $this->response(400, json_encode(array("error"=>$error)),$contentType="application/json");
+        }
+
+        return $ticket;
+    }
+
+    function _getTicket($data) {
         $hasId = isset($data['ticket_id']);
         $ticket = null;
         $query = array();
