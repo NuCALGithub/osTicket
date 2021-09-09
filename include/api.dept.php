@@ -169,6 +169,10 @@ class DeptApiController extends ApiController {
     /* private helper functions */
 
     function _updateDept($dept,$data,$errors){
+        if(!$dept){
+            $error = array("code"=>400,"message"=>'No department found with given id: bad request body');
+            return $this->response(400, json_encode(array("error"=>$error)),$contentType="application/json");
+        }
         $isUpdated = $dept->update($data,$errors);
         if (count($errors)) {
             if(isset($errors['errno']) && $errors['errno'] == 403){

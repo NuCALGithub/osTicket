@@ -166,7 +166,7 @@ class StaffApiController extends ApiController {
                 array_push($tickets,$ticket);
             }
 
-            $result = array("total"=>count($tickets),"result"=>$tickets);
+            $result = array("total"=>count($tickets),"staff_id"=>$staff->getId(),"result"=>$tickets);
             # Parse request body
         }
 

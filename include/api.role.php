@@ -138,12 +138,28 @@ class RoleApiController extends ApiController {
             $role = $this->processEmail();
         } else {
             $data = $this->getRequest($format);
-            if(isset($data['role_id']))
+            if(isset($data['role_id'])){
                 $role = Role::lookup($data['role_id']);
+                $data['id'] = $data['role_id'];
+                if(!$role){
+                    $error = array("code"=>400,"message"=>'No role found with given id: bad request body');
+                    return $this->response(400, json_encode(array("error"=>$error)),$contentType="application/json");
+                }
+            }
             else{
                 $error = array("code"=>400,"message"=>'No role_id provided: bad request body');
                 return $this->response(400, json_encode(array("error"=>$error)),$contentType="application/json");
             }
+            if( !($n = isset($data['name'])) || !($p = isset($data['perm'])) ){
+                $perms = array();
+                foreach($$role->getPermission() as $permObject){
+                    foreach($permObject as $key=>$value)
+                        array_push($perms,$key);
+                }
+                $data['name'] = $n ? $data['name'] : $role->getName();
+                $data['perms'] = $p ? $data['perms'] : $perms;
+            }
+
             $errors = array();
             $role->update($data,$errors);
             if (count($errors)) {
