@@ -218,16 +218,12 @@ implements JsonSerializable {
     }
 
     static function create($vars=false) {
-        $file = fopen("role.txt","w");
-        fwrite($file,json_encode($vars));
         $role = new static($vars);
         $role->created = SqlFunction::NOW();
         return $role;
     }
 
     static function __create($vars, &$errors) {
-        $file = fopen("role2.txt","w");
-        fwrite($file,json_encode($vars));
         $role = self::create($vars);
         if ($vars['permissions'])
             $role->updatePerms($vars['permissions']);
