@@ -819,12 +819,7 @@ class TicketApiController extends ApiController {
                 }
                 break;
             case 'getThread':
-                if($_SERVER['REQUEST_METHOD'] == 'GET'){
-                    $this->response(200, json_encode($threadEntry),$contentType="application/json");
-                } else {
-                    $error = array("code"=>400,"message"=>'HTTP method not supported for: '.$action);
-                    return $this->response(400, json_encode(array("error"=>$error)),$contentType="application/json");
-                }
+                $this->response(200, json_encode($threadEntry),$contentType="application/json");
                 break;
             default:
                 $error = array("code"=>400,"message"=>'No action found: bad request body');

@@ -3900,10 +3900,10 @@ implements RestrictedAccess, Threadable, Searchable, JsonSerializable {
     public function jsonSerialize() {
         $assignees = array();
         if ($staff = $this->getStaff())
-            $assignees[] = $staff->getFirstName()." ".$staff->getLastName();
+            $assignees = $staff->getFirstName()." ".$staff->getLastName();
 
         if ($team = $this->getTeam())
-            $assignees[] = $team->getName();
+            $assignees = $team->getName();
 
         return [
             'ticket_id' => $this->getId(),
