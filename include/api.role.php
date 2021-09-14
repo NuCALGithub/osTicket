@@ -150,7 +150,7 @@ class RoleApiController extends ApiController {
                 $error = array("code"=>400,"message"=>'No role_id provided: bad request body');
                 return $this->response(400, json_encode(array("error"=>$error)),$contentType="application/json");
             }
-            if( !($n = isset($data['name'])) || !($p = isset($data['perm'])) ){
+            if( !($n = isset($data['name'])) || !($p = isset($data['perms'])) ){
                 $perms = array();
                 foreach($$role->getPermission() as $permObject){
                     foreach($permObject as $key=>$value)
