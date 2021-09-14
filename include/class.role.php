@@ -212,7 +212,7 @@ implements JsonSerializable {
             'role_id' => $this->getId(),
             'role_name' => $this->getName(),
             'flags' => $this->get('flags'),
-            'permissions' => $this->getPermission()->perms,
+            'permissions' => $this->getPermission() ? $this->getPermission()->perms : "",
             'notes' => $this->notes
         ];
     }
