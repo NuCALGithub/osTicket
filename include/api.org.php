@@ -126,12 +126,16 @@ class OrgApiController extends ApiController {
         }
 
         $oldusers = User::objects()->filter(array("org_id"=>$org->getId()));
-        foreach($oldusers as $u){
-            $org->removeUser($u);
+        if($oldusers){
+            foreach($oldusers as $u){
+                $org->removeUser($u);
+            }
         }
-        foreach($data['users'] as $u){
-            $user = User::lookup($u);
-            $user->setOrganization($org);
+        if(isset($data['users'])){
+            foreach($data['users'] as $u){
+                $user = User::lookup($u);
+                $user->setOrganization($org);
+            }
         }
 
         $result = array("created"=>true,"org_id"=>$org->getId(),"details"=>$org);
