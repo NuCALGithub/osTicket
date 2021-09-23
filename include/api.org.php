@@ -125,6 +125,15 @@ class OrgApiController extends ApiController {
             return $this->response(500, json_encode(array("error"=>$error)),$contentType="application/json");
         }
 
+        $oldusers = User::objects()->filter(array("org_id"=>$org->getId()));
+        foreach($oldusers as $u){
+            $org->removeUser($u);
+        }
+        foreach($data['users'] as $u){
+            $user = User::lookup($u);
+            $user->setOrganization($org);
+        }
+
         $result = array("created"=>true,"org_id"=>$org->getId(),"details"=>$org);
         $this->response(201, json_encode($result),$contentType="application/json");
     }
@@ -173,8 +182,14 @@ class OrgApiController extends ApiController {
         } else {
         # Parse request body
             $data = $this->getRequest($format);
+            if(isset($data['org_id'])){
+                $org = Organization::lookup($data['org_id']);
+            }else{
+                $error = array("code"=>400,"message"=>'Unable to update organization: no id provided');
+                return $this->response(400, json_encode(array("error"=>$error)),$contentType="application/json");
+            }
             $errors = array();
-            $isUpdated = $this->_updateOrg($data,$errors);
+            $isUpdated = $this->_updateOrg($org,$data,$errors);
         }
 
         if(!$isUpdated){
@@ -223,33 +238,86 @@ class OrgApiController extends ApiController {
         $result = array("deleted"=>$isDeleted,"org_id"=>$data['org_id']);
         $this->response(200, json_encode($result),$contentType="application/json");
     }
+
+    function orgTickets($format) {
+
+        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets()){
+            $error = array("code"=>401,"message"=>'API key not authorized');
+            return $this->response(401, json_encode(array("error"=>$error)),$contentType="application/json");
+        }
+
+        $org = null;
+        if(!strcasecmp($format, 'email')) {
+            # Handle remote piped emails - could be a reply...etc.
+            $org = $this->processEmail();
+        } else {
+            $data = $this->getRequest($format);
+            $errors = array();
+            $page = 1;
+            $limit = 25;
+
+            if(isset($data['org_id'])){
+                $org = Organization::lookup($data['org_id']);
+            }
+            
+            if(isset($data['page']) && $data['page'] > 0)
+                $page = $data['page'];
+            if(isset($data['limit']) && $data['limit'] > 0){
+                if($data['limit'] > 100){
+                    $error = array("code"=>400,"message"=>'Can not give a limit above 100: bad request body');
+                    return $this->response(400, json_encode(array("error"=>$error)),$contentType="application/json");
+                }
+                $limit = $data['limit'];
+            }
+
+            
+            if(!$org){
+                $error = array("code"=>400,"message"=>'Unable to find org with given id: bad request body');
+                return $this->response(400, json_encode(array("error"=>$error)),$contentType="application/json");
+            }
+            $pagination = new Pagenate(PHP_INT_MAX, $page, $limit);
+            $queue = Ticket::objects()->filter(array("user__org_id"=>$data['org_id']))->limit($pagination->getLimit())->offset($pagination->getStart());;
+            $tickets = array();
+            foreach($queue as $ticket){
+                array_push($tickets,$ticket);
+            }
+            
+        }
+        if(!$tickets){
+            $error = array("code"=>500,"message"=>'Unable to find ticket to given org: no tickets');
+            return $this->response(500, json_encode(array("error"=>$error)),$contentType="application/json");
+        }
+        
+        $result = array('org'=>$org->getName(),
+                        'org_id'=>$org->getId(),
+                        "total"=>count($tickets),
+                        "result"=>$tickets);
+        $this->response(200, json_encode($result),$contentType="application/json");
+    }
     
 
     /* private helper functions */
 
-    function _updateOrg($data,$errors){
-        if(isset($data['org_id'])){
-            $org = Organization::lookup($data['org_id']);
-        }else{
-            $error = array("code"=>400,"message"=>'Unable to update organization: no id provided');
-            return $this->response(400, json_encode(array("error"=>$error)),$contentType="application/json");
-        }
-        
-        if($org){
-            $isUpdated = $org->update($data,$errors);
-            if (count($errors)) {
-                if(isset($errors['errno']) && $errors['errno'] == 403){
-                    $error = array("code"=>403,"message"=>'Organization denied');
-                    return $this->response(403, json_encode(array("error"=>$error)),$contentType="application/json");
-                }else{
-                    $error = array("code"=>400,"message"=>"Unable to update organization: validation errors".":\n"
-                    .Format::array_implode(": ", "\n", $errors));
-                    return $this->response(400, json_encode(array("error"=>$error)),$contentType="application/json");
-                }
+    function _updateOrg($org,$data,$errors){
+        $isUpdated = $org->update($data,$errors);
+        if (count($errors)) {
+            if(isset($errors['errno']) && $errors['errno'] == 403){
+                $error = array("code"=>403,"message"=>'Organization denied');
+                return $this->response(403, json_encode(array("error"=>$error)),$contentType="application/json");
+            }else{
+                $error = array("code"=>400,"message"=>"Unable to update organization: validation errors".":\n"
+                .Format::array_implode(": ", "\n", $errors));
+                return $this->response(400, json_encode(array("error"=>$error)),$contentType="application/json");
             }
-        }else{
-            $error = array("code"=>400,"message"=>'Unable to update organization: no org found with given id');
-            return $this->response(400, json_encode(array("error"=>$error)),$contentType="application/json");
+        }
+
+        $oldusers = User::objects()->filter(array("org_id"=>$org->getId()));
+        foreach($oldusers as $u){
+            $org->removeUser($u);
+        }
+        foreach($data['users'] as $u){
+            $user = User::lookup($u);
+            $user->setOrganization($org);
         }
 
         return true;

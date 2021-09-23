@@ -502,6 +502,66 @@ class TicketApiController extends ApiController {
         $this->response(200, json_encode($ticket),$contentType="application/json");
     }
 
+    function ticketsHaveStatus($format) {
+
+        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets()){
+            $error = array("code"=>401,"message"=>'API key not authorized');
+            return $this->response(401, json_encode(array("error"=>$error)),$contentType="application/json");
+        }
+
+        $ticket = null;
+        //$result = array();
+        if(!strcasecmp($format, 'email')) {
+            # Handle remote piped emails - could be a reply...etc.
+            $ticket = $this->processEmail();
+        } else {
+            $data = $this->getRequest($format);
+            $status = null;
+            $page = 1;
+            $limit = 25;
+            if(isset($data['status_id']) || isset($data['status'])){
+                $status = $data['status_id'] ? TicketStatus::lookup($data['status_id']) : $status;
+                $status = $data['status'] ? TicketStatus::lookup(array("name"=>$data['status'])) : $status;
+                if(!$status){
+                    $error = array("code"=>400,"message"=>'no status found with given input: bad request body');
+                    return $this->response(400, json_encode(array("error"=>$error)),$contentType="application/json");
+                }
+            }
+            else{
+                $error = array("code"=>400,"message"=>'no status_id or status provided: bad request body');
+                return $this->response(400, json_encode(array("error"=>$error)),$contentType="application/json");
+            }
+
+            if(isset($data['page']) && $data['page'] > 0)
+                $page = $data['page'];
+
+            if(isset($data['limit']) && $data['limit'] > 0){
+                if($data['limit'] > 100){
+                    $error = array("code"=>400,"message"=>'Can not give a limit above 100: bad request body');
+                    return $this->response(400, json_encode(array("error"=>$error)),$contentType="application/json");
+                }
+                $limit = $data['limit'];
+            }
+
+            $tickets = array();
+            $pagination = new Pagenate(PHP_INT_MAX, $page, $limit);
+            $query = Ticket::objects()->filter(array('status_id'=>$status->getId()))->limit($pagination->getLimit())->offset($pagination->getStart());
+
+            foreach($query as $ticket){
+                array_push($tickets,$ticket);
+            }
+
+            $result = array("status"=>$status->getName(),"total"=>count($tickets),"result"=>$tickets);
+        }
+
+        if(!$result){
+            $error = array("code"=>500,"message"=>'Unable to find tickets: unknown error');
+            return $this->response(500, json_encode(array("error"=>$error)),$contentType="application/json");
+        }
+
+        $this->response(200, json_encode($result),$contentType="application/json");
+    }
+
     function threadAction($format) {
 
         if(!($key=$this->requireApiKey()) || !$key->canCreateTickets()){

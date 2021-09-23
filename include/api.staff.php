@@ -156,8 +156,14 @@ class StaffApiController extends ApiController {
             $limit = 25;
             if(isset($data['page']) && $data['page'] > 0)
                 $page = $data['page'];
-            if(isset($data['limit']) && $data['limit'] > 0)
+
+            if(isset($data['limit']) && $data['limit'] > 0){
+                if($data['limit'] > 100){
+                    $error = array("code"=>400,"message"=>'Can not give a limit above 100: bad request body');
+                    return $this->response(400, json_encode(array("error"=>$error)),$contentType="application/json");
+                }
                 $limit = $data['limit'];
+            }
             $pagination = new Pagenate(PHP_INT_MAX, $page, $limit);
             //$page = $pagination->paginateSimple($query->getQuery());
             $page = Ticket::objects()->filter(array('staff_id'=>$staff->getId()))->limit($pagination->getLimit())->offset($pagination->getStart());

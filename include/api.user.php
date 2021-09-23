@@ -256,6 +256,59 @@ class UserApiController extends ApiController {
         $result = array('locked'=>false,'user_id'=>$user->getUserId());
         $this->response(200, json_encode($result),$contentType="application/json");
     }
+
+    function userTickets($format) {
+
+        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets()){
+            $error = array("code"=>401,"message"=>'API key not authorized');
+            return $this->response(401, json_encode(array("error"=>$error)),$contentType="application/json");
+        }
+
+        $user = null;
+        if(!strcasecmp($format, 'email')) {
+            # Handle remote piped emails - could be a reply...etc.
+            $user = $this->processEmail();
+        } else {
+            $data = $this->getRequest($format);
+            $errors = array();
+            $page = 1;
+            $limit = 25;
+
+            if(isset($data['user_id'])){
+                $user = User::lookup($data['user_id']);
+            }
+            
+            if(isset($data['page']) && $data['page'] > 0)
+                $page = $data['page'];
+            if(isset($data['limit']) && $data['limit'] > 0){
+                if($data['limit'] > 100){
+                    $error = array("code"=>400,"message"=>'Can not give a limit above 100: bad request body');
+                    return $this->response(400, json_encode(array("error"=>$error)),$contentType="application/json");
+                }
+                $limit = $data['limit'];
+            }
+
+            
+            if(!$user){
+                $error = array("code"=>400,"message"=>'Unable to find user with given id: bad request body');
+                return $this->response(400, json_encode(array("error"=>$error)),$contentType="application/json");
+            }
+            $pagination = new Pagenate(PHP_INT_MAX, $page, $limit);
+            $queue = Ticket::objects()->filter(array("user_id"=>$data['user_id']))->limit($pagination->getLimit())->offset($pagination->getStart());;
+            $tickets = array();
+            foreach($queue as $ticket){
+                array_push($tickets,$ticket);
+            }
+            
+        }
+        if(!$tickets){
+            $error = array("code"=>500,"message"=>'Unable to find ticket to given user: no tickets');
+            return $this->response(500, json_encode(array("error"=>$error)),$contentType="application/json");
+        }
+        
+        $result = array('user_id'=>$user->getId(),"total"=>count($tickets),"result"=>$tickets);
+        $this->response(200, json_encode($result),$contentType="application/json");
+    }
     
 
     /* private helper functions */
