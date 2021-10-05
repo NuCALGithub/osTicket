@@ -189,11 +189,11 @@ class DeptApiController extends ApiController {
                     
                 }
                 else{
-                    $error = array("code"=>400,"message"=>'Unable to delete department: no dept found with given dept_id');
+                    $error = array("code"=>400,"message"=>'Unable to find department: no dept found with given dept_id');
                     return $this->response(400, json_encode(array("error"=>$error)),$contentType="application/json");
                 }
             }else{
-                $error = array("code"=>400,"message"=>'Unable to delete department: no dept_id provided');
+                $error = array("code"=>400,"message"=>'Unable to find department: no dept_id provided');
                 return $this->response(400, json_encode(array("error"=>$error)),$contentType="application/json");
             }
         }
