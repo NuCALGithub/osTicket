@@ -357,7 +357,9 @@ class OrgApiController extends ApiController {
         
         // Get org information from the page and push it into orgs array
         foreach($query as $org){
-            array_push($orgs,$org);
+            $newarray = json_decode(json_encode($org),true); # Serializing to JSON
+            unset($newarray['members']);
+            array_push($orgs,$newarray);
         }
 
         // Clearing up

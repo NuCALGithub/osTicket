@@ -164,6 +164,48 @@ class DeptApiController extends ApiController {
         $result = array("deleted"=>$isDeleted,"dept_id"=>$data['dept_id']);
         $this->response(200, json_encode($result),$contentType="application/json");
     }
+
+    function deptTicketStatus($format) {
+
+        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets()){
+            $error = array("code"=>401,"message"=>'API key not authorized');
+            return $this->response(401, json_encode(array("error"=>$error)),$contentType="application/json");
+        }
+
+        $dept = null;
+        if(!strcasecmp($format, 'email')) {
+            # Handle remote piped emails - could be a reply...etc.
+            $dept = $this->processEmail();
+        } else {
+        # Parse request body
+            $data = $this->getRequest($format);
+            if(isset($data['dept_id'])){
+                $dept = Dept::lookup($data['dept_id']);
+                if($dept){
+                    $openTickets = Ticket::objects()->filter(array("dept_id"=>$dept->getId(),"status_id"=>"1"));
+                    $resolvedTickets = Ticket::objects()->filter(array("dept_id"=>$dept->getId(),"status_id"=>"2"));
+                    $closedTickets = Ticket::objects()->filter(array("dept_id"=>$dept->getId(),"status_id"=>"3"));
+                    #$isDeleted = $dept->delete();
+                    
+                }
+                else{
+                    $error = array("code"=>400,"message"=>'Unable to delete department: no dept found with given dept_id');
+                    return $this->response(400, json_encode(array("error"=>$error)),$contentType="application/json");
+                }
+            }else{
+                $error = array("code"=>400,"message"=>'Unable to delete department: no dept_id provided');
+                return $this->response(400, json_encode(array("error"=>$error)),$contentType="application/json");
+            }
+        }
+
+        /*if(!$isDeleted){
+            $error = array("code"=>500,"message"=>'Unable to delete dept: unknown error');
+            return $this->response(500, json_encode(array("error"=>$error)),$contentType="application/json");
+        }*/
+
+        $result = array("department"=>$dept->getName(),"dept_id"=>$data['dept_id'],"open_tickets"=>count($openTickets),"resolved_tickets"=>count($resolvedTickets),"closed_tickets"=>count($closedTickets));
+        $this->response(200, json_encode($result),$contentType="application/json");
+    }
     
 
     /* private helper functions */
