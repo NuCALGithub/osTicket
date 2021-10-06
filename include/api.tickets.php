@@ -1107,8 +1107,8 @@ class TicketApiController extends ApiController {
         $keepSLA = ($ticket->getSLAId() != $data['sla_id']);
 
         $ticket->topic_id = $data['topic_id'];
-        $ticket->sla_id = $data['sla_id'];
-        $ticket->source = $data['source'];
+        $ticket->sla_id = $data['sla_id'] ? $data['sla_id'] : $ticket->sla_id;
+        $ticket->source = $data['source'] ? $data['source'] : $ticket->source;
         $ticket->duedate = $data['duedate']
             ? date('Y-m-d H:i:s',Misc::dbtime($data['duedate']))
             : null;
