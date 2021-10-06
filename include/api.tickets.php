@@ -159,13 +159,17 @@ class TicketApiController extends ApiController {
             $ticket = $this->processEmail();
         } else {
             # Parse request body
-            $ticket = $this->updateTicket($this->getRequest($format));
+            $data = $this->getRequest($format);
+            $ticket = $this->getTicket($data);
+            $errors = array();
+            $isUpdated = $this->_updateTicket($ticket,$data,$errors);
         }
 
-        if(!$ticket)
-            return $this->exerr(500, __("Unable to create new ticket: unknown error"));
+        if(!$isUpdated)
+            return $this->exerr(500, __("Unable to update ticket: unknown error"));
 
-        $this->response(200, "Ticket: ".(string) $ticket->getNumber()." has updated succesfully");
+        $result = array("ticket_id"=>$ticket->getId(),"updated"=>true,"ticket"=>$ticket);
+        $this->response(200, json_encode($result),$contentType="application/json");
     }
 
     function deleteTicket($format) {
@@ -1023,30 +1027,136 @@ class TicketApiController extends ApiController {
         return $ticket;
     }
 
-    function updateTicket($data) {
-        $tic = $this->getTicket($data);
-        $errors = array();
-        if($tic != null){
-            $tic->update($data,$errors);
-            if (count($errors)) {
-                if(isset($errors['errno']) && $errors['errno'] == 403){
-                    $error = array("code"=>403,"message"=>'No Permission');
-                    return $this->response(403, json_encode(array("error"=>$error)),$contentType="application/json");
-                }else{
-                    $error = array("code"=>400,"message"=>"Unable to update ticket: validation errors".":\n"
-                    .Format::array_implode(": ", "\n", $errors));
-                    return $this->response(400, json_encode(array("error"=>$error)),$contentType="application/json");
-                }
-            } else if ($tic == null) {
-                $error = array("code"=>500,"message"=>'Unable to update ticket: unknown error');
-                return $this->response(500, json_encode(array("error"=>$error)),$contentType="application/json");
-            }
-        } else {
-            $error = array("code"=>400,"message"=>'Unable to find ticket with given id: bad request body');
-            return $this->response(400, json_encode(array("error"=>$error)),$contentType="application/json");
+    
+    function _updateTicket($ticket,$data, &$errors) {
+        global $cfg;
+
+        if (!$cfg
+        ) {
+            return false;
         }
 
-        return $tic;
+        $fields = array();
+        $fields['topicId']  = array('type'=>'int',      'required'=>1, 'error'=>__('Help topic selection is required'));
+        $fields['slaId']    = array('type'=>'int',      'required'=>0, 'error'=>__('Select a valid SLA'));
+        $fields['duedate']  = array('type'=>'date',     'required'=>0, 'error'=>__('Invalid date format - must be MM/DD/YY'));
+
+        $fields['user_id']  = array('type'=>'int',      'required'=>0, 'error'=>__('Invalid user-id'));
+
+        if (!Validator::process($fields, $data, $errors) && !$errors['err'])
+            $errors['err'] = sprintf('%s — %s',
+                __('Missing or invalid data'),
+                __('Correct any errors below and try again'));
+
+        $data['note'] = ThreadEntryBody::clean($data['note']);
+
+        if ($data['duedate']) {
+            if ($ticket->isClosed())
+                $errors['duedate']=__('Due date can NOT be set on a closed ticket');
+            elseif (strtotime($data['duedate']) === false)
+                $errors['duedate']=__('Invalid due date');
+            elseif (Misc::user2gmtime($data['duedate']) <= Misc::user2gmtime())
+                $errors['duedate']=__('Due date must be in the future');
+        }
+
+        if (isset($data['source']) // Check ticket source if provided
+            && !array_key_exists($data['source'], Ticket::getSources()))
+            $errors['source'] = sprintf( __('Invalid source given - %s'),
+                Format::htmlchars($data['source']));
+
+        $topic = Topic::lookup($data['topicId']);
+        if($topic && !$topic->isActive())
+            $errors['topicId']= sprintf(__('%s selected must be active'), __('Help Topic'));
+
+        //========================================================================================================================
+        $changes = array();
+
+        $dynamicForm = DynamicFormEntry::lookup(array('object_id'=>$ticket->getId(), 'object_type'=>'T', 'form_id'=>'2'));
+
+        $priorities = Priority::getPriorities();
+
+        foreach ($dynamicForm->getAnswers() as $answer){
+            if(isset($data['priority_id']) && $answer->field_id == 22){
+                foreach ($priorities as $priority_id=>$priority) {
+                    if($data['priority_id'] == $priority_id){
+                        if($priority_id != $answer->getIdValue())
+                            $changes['fields']["22"] = array(array($answer->getValue(),$answer->getIdValue()),array($priority,$priority_id));
+                        $answer->setValue($priority,$priority_id);
+                        $answer->save();
+                    }
+                }
+                if(!in_array($data['priority_id'],array_keys($priorities))){
+                    $error = array("code"=>400,"message"=>'Unable to update ticket: priority not found with given priority_id');
+                    return $this->response(400, json_encode(array("error"=>$error)),$contentType="application/json");
+                }
+            }
+            if(isset($data['summary']) && $answer->field_id == 20){
+                if(!strcmp($data['summmary'], $answer->getValue()))
+                    $changes['fields']['20'] = array($answer->getValue(),$data['summary']);
+                $answer->setValue($data['summary']);
+                $answer->save();
+            }
+        }
+        
+
+        //========================================================================================================================
+        if ($errors)
+            return false;
+
+        // Decide if we need to keep the just selected SLA
+        $keepSLA = ($ticket->getSLAId() != $data['slaId']);
+
+        $ticket->topic_id = $data['topicId'];
+        $ticket->sla_id = $data['slaId'];
+        $ticket->source = $data['source'];
+        $ticket->duedate = $data['duedate']
+            ? date('Y-m-d H:i:s',Misc::dbtime($data['duedate']))
+            : null;
+
+        if ($data['user_id'])
+            $ticket->user_id = $data['user_id'];
+        if ($data['duedate'])
+            // We are setting new duedate...
+            $ticket->isoverdue = 0;
+
+        //$changes = array();
+        foreach ($ticket->dirty as $F=>$old) {
+            switch ($F) {
+                case 'topic_id':
+                case 'user_id':
+                case 'source':
+                case 'duedate':
+                case 'sla_id':
+                    $changes[$F] = array($old, $ticket->{$F});
+            }
+        }
+
+        if (!$ticket->save())
+            return false;
+
+        $data['note'] = ThreadEntryBody::clean($data['note']);
+        if ($data['note'])
+            $ticket->logNote(_S('Ticket Updated'), $data['note'], "API");
+
+        if ($changes) {
+            $ticket->logEvent('edited', $changes,"API");
+        }
+
+
+        // Reselect SLA if transient
+        if (!$keepSLA
+            && (!$ticket->getSLA() || $ticket->getSLA()->isTransient())
+        ) {
+            $ticket->selectSLAId();
+        }
+
+        if (!$ticket->save())
+            return false;
+
+        $ticket->updateEstDueDate();
+        Signal::send('model.updated', $ticket);
+
+        return true;
     }
 
     function _getStaff($data){
