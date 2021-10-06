@@ -1037,8 +1037,8 @@ class TicketApiController extends ApiController {
         }
 
         $fields = array();
-        $fields['topicId']  = array('type'=>'int',      'required'=>1, 'error'=>__('Help topic selection is required'));
-        $fields['slaId']    = array('type'=>'int',      'required'=>0, 'error'=>__('Select a valid SLA'));
+        $fields['topic_id']  = array('type'=>'int',      'required'=>1, 'error'=>__('Help topic selection is required'));
+        $fields['sla_id']    = array('type'=>'int',      'required'=>0, 'error'=>__('Select a valid SLA'));
         $fields['duedate']  = array('type'=>'date',     'required'=>0, 'error'=>__('Invalid date format - must be MM/DD/YY'));
 
         $fields['user_id']  = array('type'=>'int',      'required'=>0, 'error'=>__('Invalid user-id'));
@@ -1064,9 +1064,9 @@ class TicketApiController extends ApiController {
             $errors['source'] = sprintf( __('Invalid source given - %s'),
                 Format::htmlchars($data['source']));
 
-        $topic = Topic::lookup($data['topicId']);
+        $topic = Topic::lookup($data['topic_id']);
         if($topic && !$topic->isActive())
-            $errors['topicId']= sprintf(__('%s selected must be active'), __('Help Topic'));
+            $errors['topic_id']= sprintf(__('%s selected must be active'), __('Help Topic'));
 
         //========================================================================================================================
         $changes = array();
@@ -1104,10 +1104,10 @@ class TicketApiController extends ApiController {
             return false;
 
         // Decide if we need to keep the just selected SLA
-        $keepSLA = ($ticket->getSLAId() != $data['slaId']);
+        $keepSLA = ($ticket->getSLAId() != $data['sla_id']);
 
-        $ticket->topic_id = $data['topicId'];
-        $ticket->sla_id = $data['slaId'];
+        $ticket->topic_id = $data['topic_id'];
+        $ticket->sla_id = $data['sla_id'];
         $ticket->source = $data['source'];
         $ticket->duedate = $data['duedate']
             ? date('Y-m-d H:i:s',Misc::dbtime($data['duedate']))
