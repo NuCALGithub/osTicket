@@ -1103,11 +1103,13 @@ class TicketApiController extends ApiController {
         if ($errors)
             return false;
 
+
+        $SLAVariable = SLA::lookup($data['sla_id']);
         // Decide if we need to keep the just selected SLA
         $keepSLA = ($ticket->getSLAId() != $data['sla_id']);
 
         $ticket->topic_id = $data['topic_id'];
-        $ticket->sla_id = $data['sla_id'] ? $data['sla_id'] : $ticket->sla_id;
+        $ticket->sla_id = $data['sla_id'] && $SLAVariable ? $data['sla_id'] : $ticket->sla_id;
         $ticket->source = $data['source'] ? $data['source'] : $ticket->source;
         $ticket->duedate = $data['duedate']
             ? date('Y-m-d H:i:s',Misc::dbtime($data['duedate']))
