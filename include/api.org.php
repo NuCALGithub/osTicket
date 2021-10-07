@@ -118,24 +118,15 @@ class OrgApiController extends ApiController {
             $data = $this->getRequest($format);
             $errors = array();
             $org = Organization::fromVars($data);
+            if(!$org){
+                $error = array("code"=>500,"message"=>'Unable to create new organization: unknown error');
+                return $this->response(500, json_encode(array("error"=>$error)),$contentType="application/json");
+            }
+            $this->_updateOrg($org,$data,$errors);
         }
 
-        if(!$org){
-            $error = array("code"=>500,"message"=>'Unable to create new organization: unknown error');
-            return $this->response(500, json_encode(array("error"=>$error)),$contentType="application/json");
-        }
-
-        $oldusers = User::objects()->filter(array("org_id"=>$org->getId()));
-        if($oldusers){
-            foreach($oldusers as $u){
-                $org->removeUser($u);
-            }
-        }
-        if(isset($data['users'])){
-            foreach($data['users'] as $u){
-                $user = User::lookup($u);
-                $user->setOrganization($org);
-            }
+        if(count($errors)){
+            return $this->response(400, json_encode(array("error"=>$errors)),$contentType="application/json");
         }
 
         $result = array("created"=>true,"org_id"=>$org->getId(),"details"=>$org);
@@ -194,6 +185,9 @@ class OrgApiController extends ApiController {
             }
             $errors = array();
             $isUpdated = $this->_updateOrg($org,$data,$errors);
+            if(count($errors)){
+                return $this->response(400, json_encode(array("error"=>$errors)),$contentType="application/json");
+            }
         }
 
         if(!$isUpdated){
@@ -302,19 +296,174 @@ class OrgApiController extends ApiController {
 
     /* private helper functions */
 
-    function _updateOrg($org,$data,$errors){
-        $isUpdated = $org->update($data,$errors);
-        if (count($errors)) {
-            if(isset($errors['errno']) && $errors['errno'] == 403){
-                $error = array("code"=>403,"message"=>'Organization denied');
-                return $this->response(403, json_encode(array("error"=>$error)),$contentType="application/json");
-            }else{
-                $error = array("code"=>400,"message"=>"Unable to update organization: validation errors".":\n"
-                .Format::array_implode(": ", "\n", $errors));
-                return $this->response(400, json_encode(array("error"=>$error)),$contentType="application/json");
+    function _updateOrg($org,$data,&$errors){
+        $formTrial = DynamicFormEntry::lookup(array('object_id'=>$org->getId(),'object_type'=>'O','form_id'=>'4'));
+
+        // Update Dynamic form data AKA: organization__cdata
+        foreach($formTrial->getAnswers() as $answer){
+            $fieldId = $answer->field_id;
+            switch($fieldId){
+                case 28:
+                    // ADDRESS
+                    // Check address if different than what we have
+                    if(strcmp($data['address'], $answer->getValue())){
+                        $answer->setValue($data['address']);
+                        $answer->save();
+                    }
+                    break;
+                case 29:
+                    // PHONE
+                    // Check if phone is different than we have
+                    if(isset($data['phone'])){
+                        if(preg_match('/^[0-9]{8,14}X[0-9]{0,5}\z/',$data['phone']) || preg_match('/^[0-9]{8,14}\z/', $data['phone'])){
+                            $answer->setValue($data['phone']);
+                            $answer->save();
+                        } else{
+                            $errors = array("code"=>400,"message"=>'Unable to update organization: phone number not valid and/or phone_ext too long(>5)');
+                            return false;
+                        }
+                    }                
+                    break;
+                case 30:
+                    // WEBSITE
+                    // Check if website is different than we have
+                    if(strcmp($data['website'], $answer->getValue())){
+                        // Check if it is a valid website
+                        if(preg_match('/^((?!-)[A-Za-z0-9-]{1,63}(?<!-)\\.)+[A-Za-z]{2,6}$/',$data['website'])){
+                            $answer->setValue($data['website']);
+                            $answer->save();
+                        } else {
+                            $errors = array("code"=>400,"message"=>'Unable to update organization: website not valid');
+                            return false;
+                        }
+                    }
+                    break;
+                case 31:
+                    // NOTE
+                    // Check if note is different than what we have
+                    if(strcmp($data['note'], $answer->getValue())){
+                        $answer->setValue($data['note']);
+                        $answer->save();
+                    }
+                    break;
+                default:
+                    break;
+            }
+        }
+        $formTrial->saveAnswers();
+
+        // Set Name if given
+        if(isset($data['name']) && strcasecmp($org->getName(),$data['name']))  {
+            $org->name = $data['name'];
+        }
+        
+
+        // Set Domain if given
+        if(isset($data['domain'])){
+            // Check domain is valid with regex
+            if(preg_match('/^((?!-)[A-Za-z0-9-]{1,63}(?<!-)\\.)+[A-Za-z]{2,6}$/',$data['domain'])){
+                $org->set('domain',$data['domain']);
+            } else {
+                $errors = array("code"=>400,"message"=>'Unable to update organization: domain not valid');
+                return false;
             }
         }
 
+        // Set manager if given
+        if(isset($data['manager'])){
+            $manager = Staff::lookup($data['manager']);
+            if($manager){
+                $org->set('manager',"s".$manager->getId());
+            } else {
+                $errors = array("code"=>400,"message"=>'Unable to update organization: staff not found with given id');
+                return false;
+            }
+        }
+
+        // Set Sharing setting if given
+        if(isset($data['sharing'])){
+            switch($data['sharing']){
+                case "all":
+                    $org->set('status', $org->get('status') | Organization::SHARE_EVERYBODY);
+                    break;
+
+                case "primary":
+                    $org->set('status', $org->get('status') | Organization::SHARE_PRIMARY_CONTACT);
+                    break;
+
+                case "none":
+                    $org->set('status', $org->get('status') & ~Organization::SHARE_PRIMARY_CONTACT);
+                    $org->set('status', $org->get('status') & ~Organization::SHARE_EVERYBODY);
+                    break;
+
+                default:
+                    $errors = array("code"=>400,"message"=>'Unable to update organization: sharing option not valid; valid options are [all/primary/none]');
+                    return false;
+                    break;
+            }
+
+        }
+
+        // Set Contacts if given
+        if ($data['contacts'] && is_array($data['contacts'])) {
+            foreach ($org->allMembers() as $u) {
+                $u->setPrimaryContact(array_search($u->id, $data['contacts']) !== false);
+                $u->save();
+            }
+        } else {
+            $members = $org->allMembers();
+            $members->update(array(
+                'status' => SqlExpression::bitand(
+                    new SqlField('status'), ~User::PRIMARY_ORG_CONTACT)
+                ));
+        }
+
+        // Check collab-primary if given
+        if(isset($data['collab-primary'])){
+            // collab-primary on if 1
+            if($data['collab-primary'] == 1)
+                $org->set('status', $org->get('status') | Organization::COLLAB_PRIMARY_CONTACT);
+            // collab-primary off if 0
+            else if($data['collab-primary'] == 0)
+                $org->set('status', $org->get('status') & ~Organization::COLLAB_PRIMARY_CONTACT);
+            // Error if other values
+            else{
+                $errors = array("code"=>400,"message"=>'Unable to update organization: collab-primary option not valid; valid options are [0/1]');
+                return false;
+            }
+        }
+
+        // Check collab-all if given
+        if(isset($data['collab-all'])){
+            // collab-all on if 1
+            if($data['collab-all'] == 1)
+                $org->set('status', $org->get('status') | Organization::COLLAB_ALL_MEMBERS);
+            // collab-all off if 0
+            else if($data['collab-all'] == 0)
+                $org->set('status', $org->get('status') & ~Organization::COLLAB_ALL_MEMBERS);
+            // Error if other values
+            else{
+                $errors = array("code"=>400,"message"=>'Unable to update organization: collab-all option not valid; valid options are [0/1]');
+                return false;
+            }
+        }
+
+        // Check for auto assign to manager if given
+        if(isset($data['assign-am'])){
+            // Auto assign on if 1
+            if($data['assign-am'] == 1)
+                $org->set('status', $org->get('status') | Organization::ASSIGN_AGENT_MANAGER);
+            // Auto assign off if 0
+            else if($data['assign-am'] == 0)
+                $org->set('status', $org->get('status') & ~Organization::ASSIGN_AGENT_MANAGER);
+            // Error if other values
+            else{
+                $errors = array("code"=>400,"message"=>'Unable to update organization: assign-am option not valid; valid options are [0/1]');
+                return false;
+            }
+        }
+
+        // Update user list
         $oldusers = User::objects()->filter(array("org_id"=>$org->getId()));
         foreach($oldusers as $u){
             $org->removeUser($u);
@@ -324,6 +473,9 @@ class OrgApiController extends ApiController {
             $user->setOrganization($org);
         }
 
+        // Saving
+        if(!$org->save())
+            return false;
         return true;
     }
 

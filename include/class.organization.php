@@ -576,10 +576,11 @@ implements TemplateVariable, Searchable, JsonSerializable {
             'org_id' => $this->getId(),
             'org_name' => $this->getName(),
             'manager_id' => $this->getAccountManagerId(),
-            'manager_name' => $this->getAccountManager() ? $this->getAccountManager()->getFullName() : null,
+            'manager_name' => $this->getAccountManager() ? $this->getAccountManager()->getFirstName()." ".$this->getAccountManager()->getLastName() : null,
             'status' => $this->status,
             'domain' => $this->domain,
             'extra' => $this->extra,
+            'member_count' => count($u),
             'members' => $u
         ];
     }
