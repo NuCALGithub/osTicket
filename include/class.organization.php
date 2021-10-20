@@ -580,6 +580,9 @@ implements TemplateVariable, Searchable, JsonSerializable {
             'status' => $this->status,
             'domain' => $this->domain,
             'extra' => $this->extra,
+            'assign-am' => $this->get('status') & Organization::ASSIGN_AGENT_MANAGER ? true : false,
+            'collab-all' => $this->get('status') & Organization::COLLAB_ALL_MEMBERS ? true : false,
+            'collab-primary' => $this->get('status') & Organization::COLLAB_PRIMARY_CONTACT ? true : false,
             'member_count' => count($u),
             'members' => $u
         ];

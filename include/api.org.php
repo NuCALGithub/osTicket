@@ -468,9 +468,13 @@ class OrgApiController extends ApiController {
         foreach($oldusers as $u){
             $org->removeUser($u);
         }
-        foreach($data['users'] as $u){
-            $user = User::lookup($u);
-            $user->setOrganization($org);
+        if(isset($data['users'])){
+            foreach($data['users'] as $u){
+                $user = User::lookup($u);
+                if($user)
+                    $user->setOrganization($org);
+            }
+
         }
 
         // Saving

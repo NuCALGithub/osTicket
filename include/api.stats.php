@@ -198,7 +198,7 @@ class StatsApiController extends ApiController {
                return true;
             }
         }
-
+        
         return false;
     }
 
@@ -272,54 +272,102 @@ class StatsApiController extends ApiController {
 
         switch ($group) {
         case 'dept':
+            if(isset($data['dept_id'])){
+                $depts = Dept::lookup($data['dept_id']);
+                if(!$depts){
+                    $error = array("code"=>400,"message"=>'can not find department with given id: bad request');
+                    return false;
+                }
+
+                $stats = $stats
+                ->filter(array('dept_id' => $depts->getId()))
+                ->values('dept__id', 'dept__name', 'dept__flags')
+                ->distinct('dept__id');
+                $times = $times
+                ->filter(array('dept_id' => $depts->getId()))
+                ->values('dept__id')
+                ->distinct('dept__id');
+            } else{
+                $depts = Dept::getDepartments();
+                
+                $stats = $stats
+                ->filter(array('dept_id__in' => array_keys($depts)))
+                ->values('dept__id', 'dept__name', 'dept__flags')
+                ->distinct('dept__id');
+                
+                $times = $times
+                ->filter(array('dept_id__in' => array_keys($depts)))
+                ->values('dept__id')
+                ->distinct('dept__id');
+            }
+
             $headers = array(__('Department'));
             $header = function($row) { return Dept::getLocalNameById($row['dept_id'], $row['dept__name']); };
             $pk = 'dept__id';
-            $stats = $stats
-                ->filter(array('dept_id__in' => array_keys(Dept::getDepartments())))
-                ->values('dept__id', 'dept__name', 'dept__flags')
-                ->distinct('dept__id');
-            $times = $times
-                ->filter(array('dept_id__in' => array_keys(Dept::getDepartments())))
-                ->values('dept__id')
-                ->distinct('dept__id');
+
             break;
         case 'topic':
-            $headers = array(__('Help Topic'));
-            $header = function($row) { return Topic::getLocalNameById($row['topic_id'], $row['topic__topic']); };
-            $pk = 'topic_id';
-            $topics = Topic::getHelpTopics();
-            if (empty($topics))
-                return array("columns" => array_merge($headers, $dash_headers),
-                      "data" => array());
-            $stats = $stats
+            if(isset($data['topic_id'])){
+                $topics = Topic::lookup($data['topic_id']);
+                if(!$topics){
+                    $error = array("code"=>400,"message"=>'can not find topic with given id: bad request');
+                    return false;
+                }
+                $stats = $stats
+                ->values('topic_id', 'topic__topic', 'topic__flags')
+                ->filter(array('dept_id__in' => array_keys(Dept::getDepartments()), 'topic_id__gt' => 0, 'topic_id' => $topics->getId()))
+                ->distinct('topic_id');
+            } else{
+                $topics = Topic::getHelpTopics();
+                $stats = $stats
                 ->values('topic_id', 'topic__topic', 'topic__flags')
                 ->filter(array('dept_id__in' => array_keys(Dept::getDepartments()), 'topic_id__gt' => 0, 'topic_id__in' => array_keys($topics)))
                 ->distinct('topic_id');
+            }
+            $headers = array(__('Help Topic'));
+            $header = function($row) { return Topic::getLocalNameById($row['topic_id'], $row['topic__topic']); };
+            $pk = 'topic_id';
+            if (empty($topics))
+                return array("columns" => array_merge($headers, $dash_headers),
+                      "data" => array());
+
             $times = $times
                 ->values('topic_id')
                 ->filter(array('topic_id__gt' => 0))
                 ->distinct('topic_id');
             break;
         case 'staff':
+            if(isset($data['staff_id'])){
+                $staff = Staff::lookup($data['staff_id']);
+                if(!$staff){
+                    $error = array("code"=>400,"message"=>'can not find staff with given id: bad request');
+                    return false;
+                }
+
+                $stats = $stats
+                ->values('staff_id', 'staff__firstname', 'staff__lastname')
+                ->filter(array('staff_id' => $staff->getId()))
+                ->distinct('staff_id');
+            } else{
+                $staff = Staff::getStaffMembers();
+                $stats = $stats
+                ->values('staff_id', 'staff__firstname', 'staff__lastname')
+                ->filter(array('staff_id__in' => array_keys($staff)))
+                ->distinct('staff_id');
+            }
             $headers = array(__('Agent'));
             $header = function($row) { return new AgentsName(array(
                 'first' => $row['staff__firstname'], 'last' => $row['staff__lastname'])); };
             $pk = 'staff_id';
-            $staff = Staff::getStaffMembers();
-            $stats = $stats
-                ->values('staff_id', 'staff__firstname', 'staff__lastname')
-                ->filter(array('staff_id__in' => array_keys($staff)))
-                ->distinct('staff_id');
+            
+           
             $times = $times->values('staff_id')->distinct('staff_id');
             $depts = array_keys(Dept::getDepartments());
             //if ($staff->hasPerm(ReportModel::PERM_AGENTS))
-                $depts = array_merge($depts, array_keys(Dept::getDepartments()));
-            $Q = Q::any(array(
-                'staff_id' => 1,
-            ));
+            $depts = array_merge($depts, array_keys(Dept::getDepartments()));
+            //$Q = Q::any();
             if ($depts)
-                $Q->add(array('dept_id__in' => $depts));
+                $Q= Q::any(array('dept_id__in' => $depts));
             $stats = $stats->filter(array('staff_id__gt'=>0))->filter($Q);
             $times = $times->filter(array('staff_id__gt'=>0))->filter($Q);
             break;
