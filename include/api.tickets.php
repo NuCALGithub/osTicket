@@ -900,6 +900,7 @@ class TicketApiController extends ApiController {
         $pageNumber = 1;        // Result page number
         $limit = 25;            // Page ticket count limit
         $criteria = null;       // Search criteria
+        $errors = array();
         
         // Check Params =========================================
         // Set criteria if given.
@@ -912,7 +913,7 @@ class TicketApiController extends ApiController {
         // Set ticket per page limit if given (Default: 25)
         if(isset($data['limit'])){
             // Check if limit exceeds max limit
-            if((int)$data['limit'] < 100)
+            if((int)$data['limit'] <= 100)
                 $limit = $data['limit'];
             else{
                 $error = array("code"=>400,"message"=>'Limit can not exceed 100: bad request body');
@@ -928,28 +929,285 @@ class TicketApiController extends ApiController {
                 'title' => __('Advanced Search API')
              ));
             // Set criteria
-            $query->config = $criteria;
+            $query->config = $this->parseCriteria($data,$errors);
+            if(count($errors) > 0){
+                return $this->response(400, json_encode(array("error"=>$errors)),$contentType="application/json");
+            }
             // Create pagination for newly created search query
-            $pagination = new Pagenate(PHP_INT_MAX, $pageNumber, $limit);
+            $pagination = new Pagenate(Ticket::objects()->count(), $pageNumber, $limit);
             $page = $pagination->paginateSimple($query->getQuery());
         }else{
             // Create pagination for existing search query
-            $pagination = new Pagenate(PHP_INT_MAX, $pageNumber, $limit);
+            $pagination = new Pagenate(Ticket::objects()->count(), $pageNumber, $limit);
             $page = $pagination->paginateSimple($query);
         }
 
-        
+        if(count($page) == 0 && $pageNumber > 1){
+            $errors = array("code"=>400,"message"=>"There is no such page with given page number");
+            return $this->response(400, json_encode(array("error"=>$errors)),$contentType="application/json");
+        }
         
         // Get ticket information from the page and push it into tickets array
         foreach($page as $ticket){
             array_push($tickets,$ticket);
         }
 
+        $count = count($query->getBasicQuery());
+
+        if($count == 0 || count($page) == 0){
+            $shown = "0";
+        } else if($pageNumber * $limit > $count){
+            $shown = (string)(($pageNumber-1) * $limit +1)."-".(string)($count);
+        } else {
+            $shown = (string)(($pageNumber-1) * $limit +1)."-".(string)(($pageNumber) * $limit);
+        }
         // Clearing up
-        $result = array('total'=>count($tickets),'result'=>$tickets);
+        $result = array('total'=>$count,'shown'=>$shown,'result'=>$tickets);
         return $result;
     }
 
+    function parseCriteria($criteria,&$errors){
+        $parsedCriteria = array();
+        $validCriteria = null;
+
+        $file = fopen("api.search.txt","w");
+        foreach($criteria as $key=>$c){
+            fwrite($file,json_encode($key).PHP_EOL);
+            fwrite($file,json_encode($c).PHP_EOL);
+            //$anan = new ReflectionClass(TicketStatus);
+            //fwrite($file,json_encode($anan->getFileName()).PHP_EOL);
+            switch($key){
+                case "subject":
+                    $validCriteria = array("cdata__subject","contains",$c);
+                    break;
+                // valid ID Checker
+                case "status_id":
+                    $searchableStatus = $this->validIdChecker("TicketStatus",$c,$errors);
+                    $validCriteria = array("status__state","includes",$searchableStatus);
+                    break;
+                case "dept_id":
+                    $searchableDept = $this->validIdChecker("Dept",$c,$errors);
+                    $validCriteria = array("dept_id","includes",$searchableDept);
+                    break;
+                case "topic_id":
+                    $searchableTopic = $this->validIdChecker("Topic",$c,$errors);
+                    $validCriteria = array("topic_id","includes",$searchableTopic);
+                    break;
+                case "staff_id":
+                    $searchableStaff = $this->validIdChecker("Staff",$c,$errors);
+                    $validCriteria = array("staff_id","includes",$searchableStaff);
+                    break;
+                case "sla_id":
+                    $searchableSLA = $this->validIdChecker("SLA",$c,$errors);
+                    $validCriteria = array("sla_id","includes",$searchableSLA);
+                    break;
+                case "team_id":
+                    $searchableTeam = $this->validIdChecker("Team",$c,$errors);
+                    $validCriteria = array("team_id","includes",$searchableTeam);
+                    break;
+                case "priority_id":
+                    $searchablePriority = $this->validIdChecker("Priority",$c,$errors);
+                    $validCriteria = array("cdata__priority","includes",$searchablePriority);
+                    break;
+                // Valid Bool Checker
+                case "assigned":
+                    $assigned = $this->validBoolChecker("assigned",$c,$errors);
+                    $validCriteria = array("isassigned",$assigned,null);
+                    break;
+                case "answered":
+                    $answered = $this->validBoolChecker("answered",$c,$errors);
+                    $validCriteria = array("isanswered",$answered,null);
+                    break;
+                case "overdue":
+                    $overdue = $this->validBoolChecker("overdue",$c,$errors);
+                    $validCriteria = array("isoverdue",$overdue,null);
+                    break;
+                case "merged":
+                    $merged = $this->validBoolChecker("merged",$c,$errors);
+                    $validCriteria = array("merged",$merged,null);
+                    break;
+                case "linked":
+                    $linked = $this->validBoolChecker("linked",$c,$errors);
+                    $validCriteria = array("linked",$linked,null);
+                    break;
+                
+                case "reopen_count":
+                    $firstLetter = substr($c,0,1);
+                    $number = substr($c,1);
+                    fwrite($file,json_encode(is_int($c)).PHP_EOL);
+                    fwrite($file,json_encode($firstLetter).PHP_EOL);
+                    fwrite($file,json_encode($number).PHP_EOL);
+                    if (is_numeric($c)){
+                        $validCriteria = array("reopen_count","equal",$c);
+                    } else if (is_numeric($number) && ($firstLetter == "<" || $firstLetter == ">")){
+                        switch($firstLetter){
+                            case "<":
+                                $validCriteria = array("reopen_count","less",$number);
+                                break;
+                            case ">":
+                                $validCriteria = array("reopen_count","greater",null,$number);
+                                break;
+                            default:
+                                break;
+                        } 
+                    } else{
+                        $errors = array("code"=>400,"message"=>"reopen_count only can be a number or number starts with >,< symbols");
+                    }
+                    fwrite($file,json_encode($validCriteria).PHP_EOL);
+                    
+                    break;
+                case "source":
+                    if(!is_array($c)){
+                        $errors = array("code"=>400,"message"=>"$key is not in an array");
+                        return false;
+                    }
+                    $sources = Ticket::getSources();
+                    $searchableSources = array();
+                    foreach($c as $check){
+                        if(!in_array($check,$sources)){
+                            $errors = array("code"=>400,"message"=>"$check is not a valid source");
+                            return false;
+                        }
+                        $searchableSources[strtolower($check)] = $check;
+                    }
+                    $validCriteria = array("source","includes",$searchableSources);
+                    break;
+                // Valid Date Checker
+                case "create_date":
+                    $validCriteria = $this->validDateChecker($key,"created",$c,$errors);
+                    break;
+                case "close_date":
+                    $validCriteria = $this->validDateChecker($key,"closed",$c,$errors);
+                    break;
+                case "last_update_date":
+                    $validCriteria = $this->validDateChecker($key,"lastupdate",$c,$errors);
+                    break;
+                case "sla_duedate":
+                    $validCriteria = $this->validDateChecker($key,"est_duedate",$c,$errors);
+                    break;
+                case "duedate":
+                    $validCriteria = $this->validDateChecker($key,"duedate",$c,$errors);
+                    break;
+                default:
+                    break;
+            }
+            if(count($errors))
+                return false;
+            array_push($parsedCriteria,$validCriteria);
+            
+        }
+
+        return $parsedCriteria;
+    }
+
+    function validDateChecker($key,$field,$dates,&$errors){
+        if(!is_array($dates)){
+            $errors = array("code"=>400,"message"=>"$key dates are not in an array");
+            return false;
+        }
+        // If dates has 2 index
+        if(count($dates) == 2){
+            // Check if both date and first one is before second one
+            if($this->dateChecker($dates[0]) && $this->dateChecker($dates[1]) && strtotime($dates[0]) < strtotime($dates[1])){
+                // If it is valid make a criteria for it
+                $validCriteria = array("$field","between",array("left"=>$dates[0],"right"=>$dates[1]));
+            }
+            // If has 2 indexes and does not have 2 dates. Check for '-' 
+            else if ($this->dateChecker($dates[1]) && $dates[0] == "-"){
+                // Make criteria for date before
+                $validCriteria = array("$field","before",$dates[1]);
+            } else if($this->dateChecker($dates[0]) && $dates[1] == "-"){
+                //Make criteria for date after
+                $validCriteria = array("$field","after",$dates[0]);
+            } 
+            // If dates does have 2 indexes and does not have any date data in it throw a error
+            else {
+                $errors = array("code"=>400,"message"=>"Created dates are not valid");
+                return false;
+            }
+        }// Check if only 1 date is set 
+        else if (($this->dateChecker($dates[0]) && !isset($dates[1]))){
+            // Make criteria date after that
+            $validCriteria = array("$field","after",$dates[0]);
+        }
+        // Else throw error 
+        else {
+            $errors = array("code"=>400,"message"=>"Dates are not valid: accepted dates type yyyy-mm-dd or -");
+            return false;
+        }
+        return $validCriteria;
+    }
+
+    function validIdChecker($className,$dataToCheck,&$errors){
+        $searchable = array();
+        if(!is_array($dataToCheck)){
+            $errors = array("code"=>400,"message"=>"$className Id is not in an array");
+            return false;
+        }
+        switch($className){
+            case "Staff":
+            case "Topic":
+            case "Team":
+            case "Priority":
+                $valid = $className::objects()->filter(array("$className"."_id__in"=>$dataToCheck));
+                break;
+            default:
+                $valid = $className::objects()->filter(array("id__in"=>$dataToCheck));
+                break;
+        }
+
+        if($valid->count() != count($dataToCheck)){
+            $errors = array("code"=>400,"message"=>"invalid $className Id given in array");
+            return false;
+        }
+
+        foreach($valid as $v){
+            if($className == "TicketStatus"){
+                $searchable[strtolower($v->getName())] = $v->getName();
+            } else if ($className == "Priority"){
+                $searchable[$v->getId()] = $v->getTag();
+            } else{
+                $searchable[$v->getId()] = $v->getName();
+            }
+        }
+
+        return $searchable;
+    }
+
+    function validBoolChecker($field,$dataToCheck,&$errors){
+        switch($field){
+            case "assigned":
+                $result = $this->_validBoolChecker($field,"assigned","!",$dataToCheck,$errors);
+                break;
+            default:
+                $result = $this->_validBoolChecker($field,"set","n",$dataToCheck,$errors);
+                break;
+        }
+        return $result;
+       
+    }
+
+    function _validBoolChecker($field,$bbbbb,$aaaa,$dataToCheck,&$errors){
+        if($dataToCheck === true){
+            return $bbbbb;
+        } else if ($dataToCheck === false){
+            return "$aaaa$bbbbb";
+        } else {
+            $errors = array("code"=>400,"message"=>"$field can only be true or false");
+            return -1;
+        }
+    }
+
+    function dateChecker($dateString){
+        $date = explode("-",$dateString);
+        if(count($date) == 3){
+            if(checkdate($date[1],$date[2],$date[0]) && strtotime($dateString) < time() ){
+               return true;
+            }
+        }
+        
+        return false;
+    }
     function createTicket($data) {
 
         # Pull off some meta-data
