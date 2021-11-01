@@ -970,12 +970,7 @@ class TicketApiController extends ApiController {
         $parsedCriteria = array();
         $validCriteria = null;
 
-        $file = fopen("api.search.txt","w");
         foreach($criteria as $key=>$c){
-            fwrite($file,json_encode($key).PHP_EOL);
-            fwrite($file,json_encode($c).PHP_EOL);
-            //$anan = new ReflectionClass(TicketStatus);
-            //fwrite($file,json_encode($anan->getFileName()).PHP_EOL);
             switch($key){
                 case "subject":
                     $validCriteria = array("cdata__subject","contains",$c);
@@ -1034,9 +1029,6 @@ class TicketApiController extends ApiController {
                 case "reopen_count":
                     $firstLetter = substr($c,0,1);
                     $number = substr($c,1);
-                    fwrite($file,json_encode(is_int($c)).PHP_EOL);
-                    fwrite($file,json_encode($firstLetter).PHP_EOL);
-                    fwrite($file,json_encode($number).PHP_EOL);
                     if (is_numeric($c)){
                         $validCriteria = array("reopen_count","equal",$c);
                     } else if (is_numeric($number) && ($firstLetter == "<" || $firstLetter == ">")){
@@ -1053,7 +1045,6 @@ class TicketApiController extends ApiController {
                     } else{
                         $errors = array("code"=>400,"message"=>"reopen_count only can be a number or number starts with >,< symbols");
                     }
-                    fwrite($file,json_encode($validCriteria).PHP_EOL);
                     
                     break;
                 case "source":

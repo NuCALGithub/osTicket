@@ -960,6 +960,40 @@ implements AuthenticatedUser, EmailContact, TemplateVariable, Searchable, JsonSe
 
         return true;
     }
+    
+    function APIdelete() {
+        if (!parent::delete())
+            return false;
+
+        $type = array('type' => 'deleted');
+        Signal::send('object.deleted', $this, $type);
+
+        // DO SOME HOUSE CLEANING
+        //Move remove any ticket assignments...TODO: send alert to Dept. manager?
+        Ticket::objects()
+            ->filter(array('staff_id' => $this->getId()))
+            ->update(array('staff_id' => 0));
+
+        //Update the poster and clear staff_id on ticket thread table.
+        ThreadEntry::objects()
+            ->filter(array('staff_id' => $this->getId()))
+            ->update(array(
+                'staff_id' => 0,
+                'poster' => $this->getName()->getOriginal(),
+            ));
+
+        // Cleanup Team membership table.
+        TeamMember::objects()
+            ->filter(array('staff_id'=>$this->getId()))
+            ->delete();
+
+        // Cleanup staff dept access
+        StaffDeptAccess::objects()
+            ->filter(array('staff_id'=>$this->getId()))
+            ->delete();
+
+        return true;
+    }
 
     public function jsonSerialize() {
         return [
@@ -1287,11 +1321,43 @@ implements AuthenticatedUser, EmailContact, TemplateVariable, Searchable, JsonSe
         $this->updatePerms($vars['perms'], $errors);
 
         //checkboxes
-        $vars['isadmin'] = isset($vars['isadmin']) ? 1 : 0;
-        $vars['islocked'] = isset($vars['islocked']) ? 0 : 1;
-        $vars['isvisible'] = isset($vars['isvisible']) ? 1 : 0;
-        $vars['onvacation'] = isset($vars['onvacation']) ? 1 : 0;
-        $vars['assigned_only'] = isset($vars['assigned_only']) ? 1 : 0;
+        foreach(array_keys($vars) as $key){
+            switch($key){
+                case 'isadmin':
+                case 'isvisible':
+                case 'onvacation':
+                case 'assigned_only':
+                    if($vars[$key] === 1 || $vars[$key] === "on" || $vars[$key] === true){
+                        $vars[$key] = 1;
+                    } else if($vars[$key] === 0 || $vars[$key] === "off"|| $vars[$key] === false){
+                        $vars[$key] = 0;
+                    } else {
+                        $errors[$key] = __(
+                            "$key can only be true/1/on or false/0/off"
+                        );
+                    }
+                    break;
+                case 'islocked':
+                    if($vars[$key] === 1 || $vars[$key] === "on" || $vars[$key] === true){
+                        $vars[$key] = 1;
+                    } else if($vars[$key] === 0 || $vars[$key] === "off" || $vars[$key] === false){
+                        $vars[$key] = 0;
+                    } else {
+                        $errors[$key] = __(
+                            "$key can only be true or false"
+                        );
+                    }
+                    break;
+                default:
+                    break;
+            }
+        }
+
+        #$vars['isadmin'] = isset($vars['isadmin']) ? 1 : 0;
+        #$vars['islocked'] = isset($vars['islocked']) ? 0 : 1;
+        #$vars['isvisible'] = isset($vars['isvisible']) ? 1 : 0;
+        #$vars['onvacation'] = isset($vars['onvacation']) ? 1 : 0;
+        #$vars['assigned_only'] = isset($vars['assigned_only']) ? 1 : 0;
 
         $this->isadmin = $vars['isadmin'];
         $this->isactive = $vars['islocked'];

@@ -184,6 +184,61 @@ class StaffApiController extends ApiController {
         $this->response(200, json_encode($result),$contentType="application/json");
     }
 
+    function createStaff($format){
+        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets()){
+            $error = array("code"=>401,"message"=>'API key not authorized');
+            return $this->response(401, json_encode(array("error"=>$error)),$contentType="application/json");
+        }
+
+        $data = $this->getRequest($format);
+        $staff = Staff::create();
+        $data['id'] = $staff->getId();
+        $isCreated = $this->_updateStaff($staff,$data);
+
+        if(!$isCreated){
+            $error = array("code"=>500,"message"=>'Unable to create staff: unknown error');
+            return $this->response(500, json_encode(array("error"=>$error)),$contentType="application/json");
+        }
+
+        $this->response(200, json_encode($staff),$contentType="application/json");
+    }
+
+    function updateStaff($format){
+        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets()){
+            $error = array("code"=>401,"message"=>'API key not authorized');
+            return $this->response(401, json_encode(array("error"=>$error)),$contentType="application/json");
+        }
+        $data = $this->getRequest($format);
+        $staff = $this->_getStaff($data);
+        $data['id'] = $staff->getId();
+        $isUpdated = $this->_updateStaff($staff,$data);
+        if(!$isUpdated){
+            $error = array("code"=>500,"message"=>'Unable to update staff: unknown error');
+            return $this->response(500, json_encode(array("error"=>$error)),$contentType="application/json");
+        }
+
+        $this->response(200, json_encode($staff),$contentType="application/json");
+    }
+    
+    function deleteStaff($format){
+        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets()){
+            $error = array("code"=>401,"message"=>'API key not authorized');
+            return $this->response(401, json_encode(array("error"=>$error)),$contentType="application/json");
+        }
+
+        $data = $this->getRequest($format);
+        $staff = $this->_getStaff($data);
+        $username = $staff->getUserName();
+        $isDeleted = $staff->APIdelete();
+        if(!$isDeleted){
+            $error = array("code"=>500,"message"=>'Unable to delete staff: unknown error');
+            return $this->response(500, json_encode(array("error"=>$error)),$contentType="application/json");
+        }
+
+        $result = array("deleted"=>$isDeleted,"staff_id"=>$data['staff_id'],"staff"=>$username);
+        $this->response(200, json_encode($result),$contentType="application/json");
+    }
+
     
 
     /* private helper functions */
@@ -203,6 +258,22 @@ class StaffApiController extends ApiController {
             return $this->response(400, json_encode(array("error"=>$error)),$contentType="application/json");
         }
         return $staff;
+    }
+
+    function _updateStaff($staff,$data){
+        $errors = array();
+        $isUpdated = $staff->update($data,$errors);
+        if (count($errors)) {
+            if(isset($errors['errno']) && $errors['errno'] == 403){
+                $error = array("code"=>403,"message"=>'staff denied');
+                return $this->response(403, json_encode(array("error"=>$error)),$contentType="application/json");
+            }else{
+                $error = array("code"=>400,"message"=>"Unable to take action: validation errors".":\n"
+                .Format::array_implode(": ", "\n", $errors));
+                return $this->response(400, json_encode(array("error"=>$error)),$contentType="application/json");
+            }
+        }
+        return $isUpdated;
     }
 
     function processEmail($data=false) {
