@@ -960,7 +960,7 @@ implements AuthenticatedUser, EmailContact, TemplateVariable, Searchable, JsonSe
 
         return true;
     }
-    
+
     function APIdelete() {
         if (!parent::delete())
             return false;
@@ -1327,6 +1327,7 @@ implements AuthenticatedUser, EmailContact, TemplateVariable, Searchable, JsonSe
                 case 'isvisible':
                 case 'onvacation':
                 case 'assigned_only':
+                case 'assign_use_pri_role':
                     if($vars[$key] === 1 || $vars[$key] === "on" || $vars[$key] === true){
                         $vars[$key] = 1;
                     } else if($vars[$key] === 0 || $vars[$key] === "off"|| $vars[$key] === false){
