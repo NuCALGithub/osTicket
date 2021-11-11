@@ -1064,19 +1064,49 @@ class TicketApiController extends ApiController {
                     $validCriteria = array("source","includes",$searchableSources);
                     break;
                 // Valid Date Checker
-                case "create_date":
-                    $validCriteria = $this->validDateChecker($key,"created",$c,$errors);
+                case "create_date_begin":
+                    $data = array($c,"-");
+                case "create_date_end":
+                    $date = array("-",$c);
+                    if($criteria['create_date_begin'] && $criteria['create_date_end']){
+                        $date = array($criteria['create_date_begin'],$criteria['create_date_end']);
+                    }
+                    $validCriteria = $this->validDateChecker($key,"created",$date,$errors);
                     break;
-                case "close_date":
+                case "close_date_begin":
+                    $data = array($c,"-");
+                case "close_date_end":
+                    $date = array("-",$c);
+                    if($criteria['close_date_begin'] && $criteria['close_date_end']){
+                        $date = array($criteria['close_date_begin'],$criteria['close_date_end']);
+                    }
                     $validCriteria = $this->validDateChecker($key,"closed",$c,$errors);
                     break;
-                case "last_update_date":
+                case "last_update_date_begin":
+                    $data = array($c,"-");
+                case "last_update_date_end":
+                    $date = array("-",$c);
+                    if($criteria['last_update_date_begin'] && $criteria['last_update_date_end']){
+                        $date = array($criteria['last_update_date_begin'],$criteria['last_update_date_end']);
+                    }
                     $validCriteria = $this->validDateChecker($key,"lastupdate",$c,$errors);
                     break;
-                case "sla_duedate":
+                case "sla_duedate_begin":
+                    $data = array($c,"-");
+                case "sla_duedate_end":
+                    $date = array("-",$c);
+                    if($criteria['sla_duedate_begin'] && $criteria['sla_duedate_date_end']){
+                        $date = array($criteria['sla_duedate_begin'],$criteria['sla_duedate_date_end']);
+                    }
                     $validCriteria = $this->validDateChecker($key,"est_duedate",$c,$errors);
                     break;
-                case "duedate":
+                case "duedate_begin":
+                    $data = array($c,"-");
+                case "duedate_end":
+                    $date = array("-",$c);
+                    if($criteria['duedate_begin'] && $criteria['duedate_date_end']){
+                        $date = array($criteria['duedate_begin'],$criteria['duedate_date_end']);
+                    }
                     $validCriteria = $this->validDateChecker($key,"duedate",$c,$errors);
                     break;
                 default:
