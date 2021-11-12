@@ -239,6 +239,28 @@ class StaffApiController extends ApiController {
         $this->response(200, json_encode($result),$contentType="application/json");
     }
 
+    function getPerms($format){
+        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets()){
+            $error = array("code"=>401,"message"=>'API key not authorized');
+            return $this->response(401, json_encode(array("error"=>$error)),$contentType="application/json");
+        }
+
+        $perms = array('perms'=> array(
+            User::PERM_CREATE,
+            User::PERM_EDIT,
+            User::PERM_DELETE,
+            User::PERM_MANAGE,
+            User::PERM_DIRECTORY,
+            Organization::PERM_CREATE,
+            Organization::PERM_EDIT,
+            Organization::PERM_DELETE,
+            FAQ::PERM_MANAGE,
+            Dept::PERM_DEPT,
+            Staff::PERM_STAFF,
+        ));
+
+        $this->response(200, json_encode($perms),$contentType="application/json");
+    }
     
 
     /* private helper functions */
