@@ -257,6 +257,9 @@ class StaffApiController extends ApiController {
             FAQ::PERM_MANAGE,
             Dept::PERM_DEPT,
             Staff::PERM_STAFF,
+            Email::PERM_BANLIST,
+            SearchBackend::PERM_EVERYTHING,
+            ReportModel::PERM_AGENTS
         ));
 
         $this->response(200, json_encode($perms),$contentType="application/json");
