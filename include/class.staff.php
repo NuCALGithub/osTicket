@@ -1319,7 +1319,7 @@ implements AuthenticatedUser, EmailContact, TemplateVariable, Searchable, JsonSe
 
         // Update the local permissions
         $this->updatePerms($vars['perms'], $errors);
-
+        $vars['islocked'] = isset($vars['islocked']) ? 0 : 1;
         //checkboxes
         foreach(array_keys($vars) as $key){
             switch($key){
@@ -1328,9 +1328,9 @@ implements AuthenticatedUser, EmailContact, TemplateVariable, Searchable, JsonSe
                 case 'onvacation':
                 case 'assigned_only':
                 case 'assign_use_pri_role':
-                    if($vars[$key] === 1 || $vars[$key] === "on" || $vars[$key] === true){
+                    if($vars[$key] == 1 || $vars[$key] == "on" || $vars[$key] === true){
                         $vars[$key] = 1;
-                    } else if($vars[$key] === 0 || $vars[$key] === "off"|| $vars[$key] === false){
+                    } else if($vars[$key] === 0 || $vars[$key] == "off"|| $vars[$key] === false){
                         $vars[$key] = 0;
                     } else {
                         $errors[$key] = __(
@@ -1339,9 +1339,9 @@ implements AuthenticatedUser, EmailContact, TemplateVariable, Searchable, JsonSe
                     }
                     break;
                 case 'islocked':
-                    if($vars[$key] === 1 || $vars[$key] === "on" || $vars[$key] === true){
+                    if($vars[$key] == 1 || $vars[$key] == "on" || $vars[$key] == true){
                         $vars[$key] = 1;
-                    } else if($vars[$key] === 0 || $vars[$key] === "off" || $vars[$key] === false){
+                    } else if($vars[$key] === 0 || $vars[$key] == "off" || $vars[$key] === false){
                         $vars[$key] = 0;
                     } else {
                         $errors[$key] = __(
@@ -1353,7 +1353,6 @@ implements AuthenticatedUser, EmailContact, TemplateVariable, Searchable, JsonSe
                     break;
             }
         }
-
         #$vars['isadmin'] = isset($vars['isadmin']) ? 1 : 0;
         #$vars['islocked'] = isset($vars['islocked']) ? 0 : 1;
         #$vars['isvisible'] = isset($vars['isvisible']) ? 1 : 0;

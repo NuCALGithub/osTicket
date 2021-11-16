@@ -165,8 +165,10 @@ class TicketApiController extends ApiController {
             $isUpdated = $this->_updateTicket($ticket,$data,$errors);
         }
 
-        if(!$isUpdated)
-            return $this->exerr(500, __("Unable to update ticket: unknown error"));
+        if(!$isUpdated){
+            $error = array("code"=>500,"message"=>'Unable to update ticket: unknown error');
+            return $this->response(500, json_encode(array("error"=>$error)),$contentType="application/json");
+        }
 
         $result = array("ticket_id"=>$ticket->getId(),"updated"=>true,"ticket"=>$ticket);
         $this->response(200, json_encode($result),$contentType="application/json");
@@ -481,31 +483,6 @@ class TicketApiController extends ApiController {
         $this->response(200, json_encode($ticket),$contentType="application/json");
     }
 
-    function deptTickets($format) {
-
-        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets()){
-            $error = array("code"=>401,"message"=>'API key not authorized');
-            return $this->response(401, json_encode(array("error"=>$error)),$contentType="application/json");
-        }
-
-        $ticket = null;
-        if(!strcasecmp($format, 'email')) {
-            # Handle remote piped emails - could be a reply...etc.
-            $ticket = $this->processEmail();
-        } else {
-            $data = $this->getRequest($format);
-            $query = Ticket::objects()->filter(array("dept_id"=>$data['dept_id']));
-            $ticket = $this->_searchTicket($data,$query);
-        }
-
-        if(!$ticket){
-            $error = array("code"=>500,"message"=>'Unable to find tickets: unknown error');
-            return $this->response(500, json_encode(array("error"=>$error)),$contentType="application/json");
-        }
-
-        $this->response(200, json_encode($ticket),$contentType="application/json");
-    }
-
     function ticketsHaveStatus($format) {
 
         if(!($key=$this->requireApiKey()) || !$key->canCreateTickets()){
@@ -564,6 +541,31 @@ class TicketApiController extends ApiController {
         }
 
         $this->response(200, json_encode($result),$contentType="application/json");
+    }
+
+    function deptTickets($format) {
+
+        if(!($key=$this->requireApiKey()) || !$key->canCreateTickets()){
+            $error = array("code"=>401,"message"=>'API key not authorized');
+            return $this->response(401, json_encode(array("error"=>$error)),$contentType="application/json");
+        }
+
+        $ticket = null;
+        if(!strcasecmp($format, 'email')) {
+            # Handle remote piped emails - could be a reply...etc.
+            $ticket = $this->processEmail();
+        } else {
+            $data = $this->getRequest($format);
+            $query = Ticket::objects()->filter(array("dept_id"=>$data['dept_id']));
+            $ticket = $this->_searchTicket($data,$query);
+        }
+
+        if(!$ticket){
+            $error = array("code"=>500,"message"=>'Unable to find tickets: unknown error');
+            return $this->response(500, json_encode(array("error"=>$error)),$contentType="application/json");
+        }
+
+        $this->response(200, json_encode($ticket),$contentType="application/json");
     }
 
     function threadAction($format) {
@@ -884,6 +886,8 @@ class TicketApiController extends ApiController {
                 break;
             case 'getThread':
                 $this->response(200, json_encode($threadEntry),$contentType="application/json");
+                $error = array("code"=>400,"message"=>'HTTP method not supported for: '.$action);
+                return $this->response(400, json_encode(array("error"=>$error)),$contentType="application/json");
                 break;
             default:
                 $error = array("code"=>400,"message"=>'No action found: bad request body');
@@ -952,7 +956,11 @@ class TicketApiController extends ApiController {
             array_push($tickets,$ticket);
         }
 
-        $count = count($query->getBasicQuery());
+        if(get_class($query) == "AdhocSearch"){
+            $count = count($query->getBasicQuery());
+        } else{
+            $count = $query->count();
+        }
 
         if($count == 0 || count($page) == 0){
             $shown = "0";
@@ -960,6 +968,12 @@ class TicketApiController extends ApiController {
             $shown = (string)(($pageNumber-1) * $limit +1)."-".(string)($count);
         } else {
             $shown = (string)(($pageNumber-1) * $limit +1)."-".(string)(($pageNumber) * $limit);
+        }
+
+        $deneme = Ticket::objects()->filter(array("cdata__subject__in"=>array("res","test")));
+        $arr = array();
+        foreach($deneme as $d){
+            array_push($arr,$d);
         }
         // Clearing up
         $result = array('total'=>$count,'shown'=>$shown,'result'=>$tickets);
@@ -1234,6 +1248,7 @@ class TicketApiController extends ApiController {
         
         return false;
     }
+
     function createTicket($data) {
 
         # Pull off some meta-data
@@ -1311,7 +1326,48 @@ class TicketApiController extends ApiController {
         return $ticket;
     }
 
-    
+    function updateTicket($ticket,$data,$errors) {
+
+        if($ticket != null){
+            $dynamicForm = DynamicFormEntry::lookup(array('object_id'=>$data['ticket_id'], 'object_type'=>'T', 'form_id'=>'2'));
+
+            foreach ($dynamicForm->getAnswers() as $answer){
+                if(isset($data['priority_id']) && $answer->field_id == 22){
+                    foreach (Priority::getPriorities() as $priority_id=>$priority) {
+                        if($data['priority_id'] == $priority_id){
+                            $answer->setValue($priority,$priority_id);
+                            $answer->save();
+                        }
+                    }
+                }
+                if(isset($data['summary']) && $answer->field_id == 20){
+                    $answer->setValue($data['summary']);
+                    $answer->save();
+                }
+            }
+
+            if (count($errors)) {
+                if(isset($errors['errno']) && $errors['errno'] == 403){
+                    $error = array("code"=>403,"message"=>'No Permission');
+                    return $this->response(403, json_encode(array("error"=>$error)),$contentType="application/json");
+                }else{
+                    $error = array("code"=>400,"message"=>"Unable to update ticket: validation errors".":\n"
+                    .Format::array_implode(": ", "\n", $errors));
+                    return $this->response(400, json_encode(array("error"=>$error)),$contentType="application/json");
+                }
+            } else if ($ticket == null) {
+                $error = array("code"=>500,"message"=>'Unable to update ticket: unknown error');
+                return $this->response(500, json_encode(array("error"=>$error)),$contentType="application/json");
+            }
+        } else {
+            $error = array("code"=>400,"message"=>'Unable to find ticket with given id: bad request body');
+            return $this->response(400, json_encode(array("error"=>$error)),$contentType="application/json");
+        }
+
+        return $ticket;
+    }
+
+
     function _updateTicket($ticket,$data, &$errors) {
         global $cfg;
 
@@ -1374,9 +1430,8 @@ class TicketApiController extends ApiController {
                     return $this->response(400, json_encode(array("error"=>$error)),$contentType="application/json");
                 }
             }
-            if(isset($data['summary']) && $answer->field_id == 20){
-                if(!strcmp($data['summmary'], $answer->getValue()))
-                    $changes['fields']['20'] = array($answer->getValue(),$data['summary']);
+            if(isset($data['summary']) && $answer->field_id == 20 && strcmp($data['summmary'], $answer->getValue())){
+                $changes['fields']['20'] = array($answer->getValue(),$data['summary']);
                 $answer->setValue($data['summary']);
                 $answer->save();
             }

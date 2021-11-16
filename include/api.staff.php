@@ -2,6 +2,7 @@
 
 include_once INCLUDE_DIR.'class.api.php';
 include_once INCLUDE_DIR.'class.ticket.php';
+include_once INCLUDE_DIR.'class.report.php';
 
 class StaffApiController extends ApiController {
 
@@ -273,7 +274,7 @@ class StaffApiController extends ApiController {
         $staff = null;
         if(isset($data['staffUserName'])){
             $staff = Staff::lookup(array('username' => $data['staffUserName']));
-        }else if(isset($data['staff_id'])){
+        }else if(isset($data['staff_id']) && $data['staff_id'] != 1){
             $staff = Staff::lookup($data['staff_id']);
         }else if(!$staff){
             $error = array("code"=>400,"message"=>'Unable to find staff: bad staff username or staff id');
