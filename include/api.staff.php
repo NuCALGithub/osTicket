@@ -288,6 +288,39 @@ class StaffApiController extends ApiController {
 
     function _updateStaff($staff,$data){
         $errors = array();
+
+        $data['phone'] = isset($data['phone']) ? $data['phone'] : $staff->getVar('phone');
+        $data['phone_ext'] = isset($data['phone']) ? $data['phone'] : $staff->getVar('phone');
+        $data['mobile'] = isset($data['mobile']) ? $data['mobile'] : $staff->getVar('mobile');
+        $data['islocked'] = isset($data['islocked']) ? $data['islocked'] : $staff->active;
+        $data['isadmin'] = isset($data['admin']) ? $data['admin'] : $staff->isAdmin();
+        $data['assigned_only'] = isset($data['assigned_only']) ? $data['assigned_only'] : $staff->assigned_only;
+        $data['onvacation'] = isset($data['onvacation']) ? $data['onvacation'] : $staff->onvacation;
+        $data['notes'] = isset($data['notes']) ? $data['notes'] : $staff->notes;
+        $data['assign_use_pri_role'] = isset($data['assign_use_pri_role']) ? $data['assign_use_pri_role'] : $staff->usePrimaryRoleOnAssignment();
+        
+        $dept_access = array();
+        $dept_access_role = array();
+        $dept_access_alerts = array();
+        $perms = array();
+
+        foreach($staff->dept_access as $a){
+            array_push($dept_access,$a->role_id);
+            $dept_access_role[$a->dept_id] = $a->role_id;
+            $dept_access_alerts[$a->dept_id] = $a->isAlertsEnabled();
+        }
+
+        if($staff->getPermission()->perms != null){
+            foreach(array_keys($staff->getPermission()->perms) as $p){
+                array_push($perms,$p);
+            }
+        }
+
+        $data['dept_access'] = isset($data['dept_access']) ? $data['dept_access'] : $dept_access;
+        $data['dept_access_role'] = isset($data['dept_access_role']) ? $data['dept_access_role'] : $dept_access_role;
+        $data['dept_access_alerts'] = isset($data['dept_access_alerts']) ? $data['dept_access_alerts'] : $dept_access_alerts;
+        $data['perms'] = isset($data['perms']) ? $data['perms'] : $perms;
+
         $isUpdated = $staff->update($data,$errors);
         if (count($errors)) {
             if(isset($errors['errno']) && $errors['errno'] == 403){
