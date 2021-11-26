@@ -293,7 +293,7 @@ class StaffApiController extends ApiController {
         $data['phone_ext'] = isset($data['phone']) ? $data['phone'] : $staff->getVar('phone');
         $data['mobile'] = isset($data['mobile']) ? $data['mobile'] : $staff->getVar('mobile');
         $data['islocked'] = isset($data['islocked']) ? $data['islocked'] : $staff->active;
-        $data['isadmin'] = isset($data['admin']) ? $data['admin'] : $staff->isAdmin();
+        $data['isadmin'] = isset($data['isadmin']) ? $data['isadmin'] : $staff->isAdmin();
         $data['assigned_only'] = isset($data['assigned_only']) ? $data['assigned_only'] : $staff->assigned_only;
         $data['onvacation'] = isset($data['onvacation']) ? $data['onvacation'] : $staff->onvacation;
         $data['notes'] = isset($data['notes']) ? $data['notes'] : $staff->notes;
